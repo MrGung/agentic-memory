@@ -121,3 +121,9 @@ llm.clj
 - `src/tools.clj` — Tool-Definitionen + Dispatcher
 - `src/copilot_cli.clj` — GitHub Copilot CLI Integration
 - `.env.example` — Beispielvariablen
+
+## Sicherheitshinweis
+
+Das Tool `shell_execute` führt beliebige Shell-Befehle auf deinem System aus.
+Verwende dieses System nur in vertrauenswürdigen Umgebungen und prüfe Tool-Calls
+des LLMs vor der Ausführung.

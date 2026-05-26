@@ -1,5 +1,5 @@
 (ns tools
-  (:require [babashka.process :as p]
+  (:require [babashka.process :refer [sh]]
             [cheshire.core :as json]
             [clojure.string :as str]
             [copilot-cli :as copilot]
@@ -30,7 +30,7 @@
 
 (defn- shell-execute [command]
   (try
-    (let [result (p/shell {:out :string :err :string :continue true} command)]
+    (let [result (sh {:shell true} command)]
       {:stdout (:out result) :stderr (:err result) :exit (:exit result)})
     (catch Exception e
       {:stdout "" :stderr (.getMessage e) :exit 1})))

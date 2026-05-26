@@ -1,9 +1,9 @@
 (ns copilot-cli
-  (:require [babashka.process :as p]))
+  (:require [babashka.process :refer [sh]]))
 
 (defn- run-gh! [args]
   (try
-    (let [result (apply p/shell {:out :string :err :string :continue true} "gh" args)]
+    (let [result (apply sh "gh" args)]
       {:stdout (:out result)
        :stderr (:err result)
        :exit (:exit result)})
