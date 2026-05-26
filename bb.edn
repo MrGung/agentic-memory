@@ -1,0 +1,11 @@
+{:deps {babashka/sqlite3 {:mvn/version "0.1.0"}
+        cheshire/cheshire {:mvn/version "5.13.0"}
+        clj-http/clj-http {:mvn/version "3.13.0"}}
+ :paths ["src" "test"]
+ :tasks
+ {run  {:doc "Start the agentic memory loop"
+        :task (exec 'core/-main)}
+  repl {:doc "Start a Babashka REPL"
+        :task (exec 'clojure.main/main ["-r"])}
+  test {:doc "Run all tests"
+        :task (exec 'clojure.test/run-all-tests)}}}
