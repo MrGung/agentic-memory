@@ -13,7 +13,9 @@
         data (:event/data event)]
     (case event-type
       :user-message {:role "user" :content (:text data)}
-      :assistant-message {:role "assistant" :content (:text data)}
+      :assistant-message (let [tool-calls (seq (:tool-calls data))]
+                           (cond-> {:role "assistant" :content (or (:text data) "")}
+                             tool-calls (assoc :tool_calls (vec tool-calls))))
       :tool-result {:role "tool"
                     :tool_call_id (:tool-call-id data)
                     :content (pr-str (:result data))}
@@ -55,16 +57,14 @@
 
 (defn -main [& _]
   (events/init-db!)
+  (.addShutdownHook (Runtime/getRuntime)
+                    (Thread. #(println "\nGraceful shutdown (Ctrl+C).")))
   (println "Agentic Memory gestartet. Tippe 'exit' zum Beenden.")
-  (try
-    (loop []
-      (print "you> ")
-      (flush)
-      (when-let [line (read-line)]
-        (if (= "exit" (str/trim line))
-          (println "Bye!")
-          (do
-            (process-user-message! line)
-            (recur)))))
-    (catch InterruptedException _
-      (println "\nGraceful shutdown (Ctrl+C)."))))
+  (loop []
+    (print "you> ")
+    (flush)
+    (when-let [line (read-line)]
+      (when-not (= "exit" (str/trim line))
+        (process-user-message! line)
+        (recur))))
+  (println "Bye!"))
