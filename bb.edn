@@ -1,0 +1,8 @@
+{:deps {babashka/sqlite3 {:mvn/version "0.1.0"}
+        cheshire/cheshire {:mvn/version "5.13.0"}
+        clj-http/clj-http {:mvn/version "3.13.0"}}
+ :paths ["src" "test"]
+ :tasks
+ {run "bb -m core"
+  repl "bb repl"
+  test "bb -e \"(require 'clojure.test) (let [summary (clojure.test/run-all-tests #\\\".*test\\\")] (when (pos? (+ (:fail summary 0) (:error summary 0))) (System/exit 1)))\""}}
