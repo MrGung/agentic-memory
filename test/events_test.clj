@@ -1,5 +1,6 @@
 (ns events-test
   (:require [babashka.fs :as fs]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [events :as events])
   (:import [java.nio.file Files]
@@ -41,6 +42,28 @@
     (let [user-events (events/get-events-by-type :user-message)]
       (is (= 1 (count user-events)))
       (is (every? #(= :user-message (:event/type %)) user-events)))))
+
+(deftest test-get-events-by-query
+  (testing "Query-basierte Suche liefert korrekte Ergebnisse"
+    (events/init-db!)
+    (events/append-event! :user-message {:text "Testnachricht"})
+    (events/append-event! :user-message {:text "Eine weitere Nachricht"})
+    (events/append-event! :assistant-message {:text "Testantwort"})
+    (events/append-event! :assistant-message {:text "100% Treffer"})
+
+    (let [results (events/get-events-by-query "Test" nil)]
+      (is (= 2 (count results)))
+      (is (every? #(str/includes? (pr-str (:event/data %)) "Test") results)))
+
+    (let [user-results (events/get-events-by-query "Test" :user-message)]
+      (is (= 1 (count user-results)))
+      (is (= :user-message (:event/type (first user-results)))))
+
+    (let [all-results (events/get-events-by-query nil nil)
+          percent-results (events/get-events-by-query "%" nil)]
+      (is (= 4 (count all-results)))
+      (is (= ["100% Treffer"]
+             (mapv #(get-in % [:event/data :text]) percent-results))))))
 
 (deftest test-get-context-window
   (testing "Kontextfenster gibt maximal N Events zurück"
