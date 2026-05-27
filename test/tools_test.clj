@@ -69,3 +69,25 @@
           result (json/parse-string (:content response) true)]
       (is (= 1 (count (:matches result))))
       (is (= :assistant-message (get-in result [:matches 0 :event/type]))))))
+
+(deftest test-safe-path
+  (testing "Pfade innerhalb des Working Directory sind erlaubt"
+    (is (#'tools/safe-path? "README.md"))
+    (is (#'tools/safe-path? "src/tools.clj")))
+  (testing "Pfad-Traversal wird blockiert"
+    (is (not (#'tools/safe-path? "../../etc/passwd")))
+    (is (not (#'tools/safe-path? "/etc/passwd")))))
+
+(deftest test-file-read-write
+  (let [tmp "test-tmp-file.txt"]
+    (testing "Datei schreiben und lesen"
+      ;; file-write mit auto-confirm mocken
+      (with-redefs [tools/confirm-write! (constantly true)]
+        (let [write-result (#'tools/file-write tmp "Hallo Test")]
+          (is (= 0 (:exit write-result)))
+          (is (:written write-result))))
+      (let [read-result (#'tools/file-read tmp)]
+        (is (= 0 (:exit read-result)))
+        (is (= "Hallo Test" (:content read-result))))
+      ;; Aufräumen
+      (clojure.java.io/delete-file tmp true))))

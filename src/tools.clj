@@ -23,7 +23,21 @@
     :parameters {:type "object"
                  :properties {:query {:type "string"}
                               :event-type {:type "string"}}
-                 :required ["query"]}}])
+                 :required ["query"]}}
+   {:name "file_read"
+    :description "Read the contents of a file at the given path"
+    :parameters {:type "object"
+                 :properties {:path {:type "string"
+                                     :description "The file path to read"}}
+                 :required ["path"]}}
+   {:name "file_write"
+    :description "Write content to a file at the given path"
+    :parameters {:type "object"
+                 :properties {:path    {:type "string"
+                                        :description "The file path to write to"}
+                              :content {:type "string"
+                                        :description "The content to write"}}
+                 :required ["path" "content"]}}])
 
 (def openai-tools
   (mapv (fn [tool] {:type "function" :function tool}) tool-definitions))
@@ -55,6 +69,41 @@
         (catch Exception e
           {:stdout "" :stderr (.getMessage e) :exit 1})))))
 
+(defn- safe-path? [path]
+  (let [canonical (-> (java.io.File. path) .getCanonicalPath)
+        cwd       (-> (java.io.File. ".") .getCanonicalPath)]
+    (str/starts-with? canonical cwd)))
+
+(defn- file-read [path]
+  (if-not (safe-path? path)
+    {:content nil :error (str "Zugriff verweigert: " path) :exit 1}
+    (try
+      {:content (slurp path) :error nil :exit 0}
+      (catch Exception e
+        {:content nil :error (.getMessage e) :exit 1}))))
+
+(defn- confirm-write! [path]
+  (println (str "\n⚠️  Der Agent möchte in folgende Datei schreiben:\n\n  " path "\n"))
+  (print "Erlauben? [j/N] ")
+  (flush)
+  (let [answer (str/trim (or (read-line) ""))]
+    (= "j" (str/lower-case answer))))
+
+(defn- file-write [path content]
+  (cond
+    (not (safe-path? path))
+    {:written false :error (str "Zugriff verweigert: " path) :exit 1}
+
+    (not (confirm-write! path))
+    {:written false :error (str "Schreiben abgelehnt: " path) :exit 1}
+
+    :else
+    (try
+      (spit path content)
+      {:written true :error nil :exit 0}
+      (catch Exception e
+        {:written false :error (.getMessage e) :exit 1}))))
+
 (defn- memory-search [{:keys [query event-type]}]
   (let [normalized-event-type (cond
                                 (keyword? event-type) event-type
@@ -67,6 +116,8 @@
     "shell_suggest" (copilot/suggest-shell-command (or (:task arguments) ""))
     "shell_execute" (shell-execute (or (:command arguments) ""))
     "memory_search" (memory-search arguments)
+    "file_read"  (file-read  (or (:path arguments) ""))
+    "file_write" (file-write (or (:path arguments) "") (or (:content arguments) ""))
     {:error (str "Unknown tool: " name)}))
 
 (defn dispatch-tool-call! [tool-call]
