@@ -55,16 +55,32 @@
                 (recur next-messages (inc iteration)))
               (println (if (str/blank? content) "[no content]" content)))))))))
 
-(defn -main [& _]
-  (events/init-db!)
-  (.addShutdownHook (Runtime/getRuntime)
-                    (Thread. #(println "\nGraceful shutdown (Ctrl+C).")))
-  (println "Agentic Memory gestartet. Tippe 'exit' zum Beenden.")
-  (loop []
-    (print "you> ")
-    (flush)
-    (when-let [line (read-line)]
-      (when-not (= "exit" (str/trim line))
-        (process-user-message! line)
-        (recur))))
-  (println "Bye!"))
+(defn -main [& [session-name]]
+  (let [session-id (or session-name (str (java.util.UUID/randomUUID)))]
+    (binding [events/*session-id* session-id]
+      (events/init-db!)
+      (.addShutdownHook (Runtime/getRuntime)
+                        (Thread. #(println "\nGraceful shutdown (Ctrl+C).")))
+      (println (str "Agentic Memory gestartet. Session: " session-id))
+      (println "Tippe 'exit' zum Beenden, 'sessions' zum Auflisten aller Sessions.")
+      (loop []
+        (print "you> ")
+        (flush)
+        (when-let [line (read-line)]
+          (let [trimmed (str/trim line)]
+            (cond
+              (= "exit" trimmed)
+              nil
+
+              (= "sessions" trimmed)
+              (do
+                (doseq [s (events/list-sessions)]
+                  (println (str "  " (:session s)
+                                "  Events: " (:event_count s)
+                                "  Zuletzt: " (:last_active s))))
+                (recur))
+
+              :else
+              (do
+                (process-user-message! trimmed)
+                (recur))))))))))

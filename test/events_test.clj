@@ -10,7 +10,8 @@
   (let [dir (str (Files/createTempDirectory "agentic-memory-events-test"
                                             (make-array FileAttribute 0)))
         db-path (str (fs/path dir "test-memory.db"))]
-    (binding [events/*db-path* db-path]
+    (binding [events/*db-path* db-path
+              events/*session-id* "test-session-default"]
       (try
         (events/close-db!)
         (f)
@@ -74,3 +75,36 @@
       (is (= 3 (count window)))
       (is (= ["msg-2" "msg-3" "msg-4"]
              (mapv #(get-in % [:event/data :text]) window))))))
+
+(deftest test-session-isolation
+  (testing "Events verschiedener Sessions sind isoliert"
+    (binding [events/*session-id* "session-A"]
+      (events/init-db!)
+      (events/append-event! :user-message {:text "Nachricht von A"}))
+    (binding [events/*session-id* "session-B"]
+      (events/append-event! :user-message {:text "Nachricht von B"}))
+    (binding [events/*session-id* "session-A"]
+      (let [evts (events/get-events)]
+        (is (= 1 (count evts)))
+        (is (= "Nachricht von A" (get-in (first evts) [:event/data :text])))))))
+
+(deftest test-cross-session-search
+  (testing "Cross-session Suche findet Events aus allen Sessions"
+    (events/init-db!)
+    (binding [events/*session-id* "session-X"]
+      (events/append-event! :user-message {:text "Wichtige Info aus X"}))
+    (binding [events/*session-id* "session-Y"]
+      (events/append-event! :user-message {:text "Wichtige Info aus Y"}))
+    (binding [events/*session-id* "session-Y"]
+      (let [results (events/get-events-by-query "Wichtige Info" nil true)]
+        (is (= 2 (count results)))))))
+
+(deftest test-list-sessions
+  (testing "list-sessions gibt alle Sessions zurück"
+    (events/init-db!)
+    (binding [events/*session-id* "session-1"]
+      (events/append-event! :user-message {:text "test"}))
+    (binding [events/*session-id* "session-2"]
+      (events/append-event! :user-message {:text "test"}))
+    (let [sessions (events/list-sessions)]
+      (is (>= (count sessions) 2)))))

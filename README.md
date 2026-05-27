@@ -66,6 +66,7 @@ Jedes Event wird als EDN-Datenstruktur gespeichert:
 
 ```clojure
 {:event/id        #uuid "..."
+ :event/session   "mein-projekt"
  :event/type      :user-message
  :event/timestamp "2026-05-26T..."
  :event/data      {...}}
@@ -79,12 +80,33 @@ Unterstützte Event-Typen:
 - `:tool-result`
 - `:error`
 
+## Sessions
+
+Jeder Start von `bb run` erstellt automatisch eine neue Session:
+
+```bash
+bb run              # Neue zufällige Session-ID
+bb run mein-projekt # Benannte Session (wiederverwendbar)
+```
+
+### Session-Befehle
+
+| Befehl       | Beschreibung                        |
+|--------------|-------------------------------------|
+| `sessions`   | Alle bisherigen Sessions auflisten  |
+| `exit`       | Session beenden                     |
+
+### Cross-Session Gedächtnis
+
+Das Tool `memory_search` kann mit `cross-session: true` über alle Sessions suchen — so hat der Agent Zugriff auf sein gesamtes Langzeitgedächtnis.
+
 ## Event Store
 
 - Datei: `memory.db`
 - Tabelle: `events`
 - Spalten:
   - `id` (TEXT)
+  - `session` (TEXT)
   - `type` (TEXT)
   - `data` (EDN als TEXT)
   - `timestamp` (TEXT, ISO-8601)
