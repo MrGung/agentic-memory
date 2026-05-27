@@ -4,19 +4,31 @@
   (:import [java.time Instant]
            [java.util UUID]))
 
-(def ^:private db-path "memory.db")
+(def ^:dynamic *db-path* "memory.db")
 
 (def ^:private conn (atom nil))
+(def ^:private conn-db-path (atom nil))
+
+(defn close-db! []
+  (when-let [db @conn]
+    (sqlite/close db))
+  (reset! conn nil)
+  (reset! conn-db-path nil)
+  nil)
 
 (defn- get-conn []
-  (when (nil? @conn)
-    (reset! conn (sqlite/open db-path)))
+  (when (or (nil? @conn)
+            (not= @conn-db-path *db-path*))
+    (close-db!)
+    (reset! conn (sqlite/open *db-path*))
+    (reset! conn-db-path *db-path*))
   @conn)
 
 (defn init-db! []
   (sqlite/execute!
    (get-conn)
-   ["CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, type TEXT NOT NULL, data TEXT NOT NULL, timestamp TEXT NOT NULL)"]))
+   ["CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, type TEXT NOT NULL, data TEXT NOT NULL, timestamp TEXT NOT NULL)"])
+  nil)
 
 (defn append-event! [event-type data]
   (let [id (UUID/randomUUID)
