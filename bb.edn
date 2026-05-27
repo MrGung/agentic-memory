@@ -3,9 +3,24 @@
         clj-http/clj-http {:mvn/version "3.13.0"}}
  :paths ["src" "test"]
  :tasks
- {run  {:doc "Start the agentic memory loop"
+ {:override-builtin true
+  run  {:doc "Start the agentic memory loop"
         :task (exec 'core/-main)}
   repl {:doc "Start a Babashka REPL"
         :task (exec 'clojure.main/main ["-r"])}
   test {:doc "Run all tests"
-        :task (exec 'clojure.test/run-all-tests)}}}
+        :requires ([babashka.fs :as fs]
+                   [clojure.string :as str]
+                   [clojure.test :as t])
+        :task (do
+                (doseq [file (sort (map str (fs/glob "test" "**/*_test.clj")))]
+                  (require
+                   (symbol
+                    (-> file
+                        (str/replace (re-pattern "^test/") "")
+                        (str/replace (re-pattern "\\.clj$") "")
+                        (str/replace (re-pattern "/") ".")
+                        (str/replace (re-pattern "_") "-")))))
+                (let [{:keys [fail error]} (t/run-all-tests (re-pattern ".*-test$"))]
+                  (when (pos? (+ fail error))
+                    (throw (ex-info "Tests failed" {:fail fail :error error})))))}}}
