@@ -56,17 +56,11 @@
           {:stdout "" :stderr (.getMessage e) :exit 1})))))
 
 (defn- memory-search [{:keys [query event-type]}]
-  (let [events (if event-type
-                 (events/get-events-by-type (keyword event-type))
-                 (events/get-events))
-        q (str/lower-case (or query ""))]
-    {:matches
-     (->> events
-          (filter (fn [event]
-                    (str/includes?
-                     (str/lower-case (pr-str event))
-                     q)))
-          vec)}))
+  (let [normalized-event-type (cond
+                                (keyword? event-type) event-type
+                                (and (string? event-type) (not (str/blank? event-type))) (keyword event-type)
+                                :else nil)]
+    {:matches (events/get-events-by-query (or query "") normalized-event-type)}))
 
 (defn- execute-tool [{:keys [name arguments]}]
   (case name

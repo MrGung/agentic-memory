@@ -56,3 +56,16 @@
       (is (= 1 (count (:matches result))))
       (is (= :user-message (get-in result [:matches 0 :event/type])))
       (is (= [:user-message :tool-call :tool-result] event-types)))))
+
+(deftest test-dispatch-tool-call-with-event-type-filter
+  (testing "memory_search unterstützt optionalen event-type Filter"
+    (events/init-db!)
+    (events/append-event! :user-message {:text "Testfrage"})
+    (events/append-event! :assistant-message {:text "Testantwort"})
+    (let [response (tools/dispatch-tool-call!
+                    {:id "call-2"
+                     :function {:name "memory_search"
+                                :arguments (json/generate-string {:event-type "assistant-message"})}})
+          result (json/parse-string (:content response) true)]
+      (is (= 1 (count (:matches result))))
+      (is (= :assistant-message (get-in result [:matches 0 :event/type]))))))
