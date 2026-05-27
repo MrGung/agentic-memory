@@ -124,6 +124,10 @@ llm.clj
 
 ## Sicherheitshinweis
 
-Das Tool `shell_execute` führt beliebige Shell-Befehle auf deinem System aus.
-Verwende dieses System nur in vertrauenswürdigen Umgebungen und prüfe Tool-Calls
-des LLMs vor der Ausführung.
+Das Tool `shell_execute` ist mit zwei Sicherheitsstufen abgesichert:
+
+1. **Allowlist**: Folgende Programme werden direkt ohne Rückfrage ausgeführt:
+   `ls`, `find`, `cat`, `grep`, `echo`, `curl`, `git`, `gh`, `bb`, `pwd`, `env`, `which`, `date`
+
+2. **Human-in-the-Loop**: Alle anderen Programme lösen eine interaktive Bestätigungsaufforderung aus.
+   Der Agent kann keinen unbekannten Befehl ohne explizite Zustimmung des Benutzers ausführen.

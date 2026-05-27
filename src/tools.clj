@@ -28,12 +28,32 @@
 (def openai-tools
   (mapv (fn [tool] {:type "function" :function tool}) tool-definitions))
 
+(def ^:private allowed-commands
+  #{"ls" "find" "cat" "grep" "echo" "curl" "git" "gh" "bb" "pwd" "env" "which" "date"})
+
+(defn- allowed? [command]
+  (let [program (first (str/split (str/trim command) #"\s+"))]
+    (contains? allowed-commands program)))
+
+(defn- confirm-execution! [command]
+  (println (str "\n⚠️  Unbekanntes Programm — der Agent möchte folgenden Befehl ausführen:\n\n  " command "\n"))
+  (print "Erlauben? [j/N] ")
+  (flush)
+  (let [answer (str/trim (or (read-line) ""))]
+    (= "j" (str/lower-case answer))))
+
 (defn- shell-execute [command]
-  (try
-    (let [result (sh {:shell true} command)]
-      {:stdout (:out result) :stderr (:err result) :exit (:exit result)})
-    (catch Exception e
-      {:stdout "" :stderr (.getMessage e) :exit 1})))
+  (let [permitted (or (allowed? command)
+                      (confirm-execution! command))]
+    (if-not permitted
+      {:stdout ""
+       :stderr (str "Ausführung abgelehnt: " command)
+       :exit 1}
+      (try
+        (let [result (sh {:shell true :out :string :err :string} command)]
+          {:stdout (:out result) :stderr (:err result) :exit (:exit result)})
+        (catch Exception e
+          {:stdout "" :stderr (.getMessage e) :exit 1})))))
 
 (defn- memory-search [{:keys [query event-type]}]
   (let [events (if event-type
