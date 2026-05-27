@@ -16,8 +16,4 @@
   (run-gh! ["copilot" "suggest" "-t" "shell" task]))
 
 (defn explain-command [cmd]
-  (let [target (cond
-                 (.startsWith cmd "gh ") "gh"
-                 (.startsWith cmd "git ") "git"
-                 :else "shell")]
-    (run-gh! ["copilot" "explain" "-t" target cmd])))
+  (run-gh! ["copilot" "explain" cmd]))
