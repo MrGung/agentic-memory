@@ -131,3 +131,13 @@ Das Tool `shell_execute` ist mit zwei Sicherheitsstufen abgesichert:
 
 2. **Human-in-the-Loop**: Alle anderen Programme lösen eine interaktive Bestätigungsaufforderung aus.
    Der Agent kann keinen unbekannten Befehl ohne explizite Zustimmung des Benutzers ausführen.
+
+## Verfügbare Tools
+
+| Tool           | Beschreibung                                                    |
+|----------------|-----------------------------------------------------------------|
+| `shell_suggest` | Schlägt einen Shell-Befehl per GitHub Copilot CLI vor          |
+| `shell_execute` | Führt einen Shell-Befehl aus (Allowlist + Human-in-the-Loop)   |
+| `memory_search` | Durchsucht vergangene Events im Speicher                       |
+| `file_read`    | Liest den Inhalt einer Datei (nur im Working Directory)         |
+| `file_write`   | Schreibt Inhalt in eine Datei (mit Bestätigungsprompt)          |
