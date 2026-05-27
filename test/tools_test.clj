@@ -70,6 +70,50 @@
       (is (= 1 (count (:matches result))))
       (is (= :assistant-message (get-in result [:matches 0 :event/type]))))))
 
+(deftest test-load-allowed-commands-from-env
+  (testing "Allowlist wird aus SHELL_ALLOWED_COMMANDS geladen"
+    (with-redefs [tools/get-env (fn [k] (when (= k "SHELL_ALLOWED_COMMANDS") "bb,clj,node"))]
+      (let [cmds (#'tools/load-allowed-commands)]
+        (is (contains? cmds "bb"))
+        (is (contains? cmds "clj"))
+        (is (contains? cmds "node"))
+        (is (not (contains? cmds "ls"))))))
+  (testing "Default-Allowlist wird verwendet wenn keine Env-Variable und keine Datei gesetzt"
+    (with-redefs [tools/get-env (constantly nil)]
+      (let [cmds (#'tools/load-allowed-commands)]
+        (is (contains? cmds "ls"))
+        (is (contains? cmds "git"))))))
+
+(deftest test-load-allowed-commands-from-file
+  (testing "Allowlist wird aus Datei geladen wenn SHELL_ALLOWED_COMMANDS_FILE gesetzt"
+    (let [tmp-file (java.io.File/createTempFile "shell_allowed" ".txt")]
+      (try
+        (spit (.getPath tmp-file) "bb\nclj\nnode\n")
+        (with-redefs [tools/get-env (fn [k]
+                                      (when (= k "SHELL_ALLOWED_COMMANDS_FILE")
+                                        (.getPath tmp-file)))]
+          (let [cmds (#'tools/load-allowed-commands)]
+            (is (contains? cmds "bb"))
+            (is (contains? cmds "clj"))
+            (is (contains? cmds "node"))
+            (is (not (contains? cmds "ls")))))
+        (finally
+          (.delete tmp-file)))))
+  (testing "SHELL_ALLOWED_COMMANDS hat Vorrang vor Datei"
+    (let [tmp-file (java.io.File/createTempFile "shell_allowed" ".txt")]
+      (try
+        (spit (.getPath tmp-file) "only-in-file\n")
+        (with-redefs [tools/get-env (fn [k]
+                                      (case k
+                                        "SHELL_ALLOWED_COMMANDS" "from-env"
+                                        "SHELL_ALLOWED_COMMANDS_FILE" (.getPath tmp-file)
+                                        nil))]
+          (let [cmds (#'tools/load-allowed-commands)]
+            (is (contains? cmds "from-env"))
+            (is (not (contains? cmds "only-in-file")))))
+        (finally
+          (.delete tmp-file))))))
+
 (deftest test-safe-path
   (testing "Pfade innerhalb des Working Directory sind erlaubt"
     (is (#'tools/safe-path? "README.md"))

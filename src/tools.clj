@@ -42,8 +42,28 @@
 (def openai-tools
   (mapv (fn [tool] {:type "function" :function tool}) tool-definitions))
 
-(def ^:private allowed-commands
+(def ^:private default-allowed-commands
   #{"ls" "find" "cat" "grep" "echo" "curl" "git" "gh" "bb" "pwd" "env" "which" "date"})
+
+(defn get-env
+  "Wrapper around System/getenv to allow test-time substitution."
+  [k]
+  (System/getenv k))
+
+(defn- load-from-file [path]
+  (when (.exists (java.io.File. path))
+    (let [cmds (set (remove str/blank? (map str/trim (str/split-lines (slurp path)))))]
+      (when (seq cmds) cmds))))
+
+(defn- load-allowed-commands []
+  (or
+    (when-let [env (get-env "SHELL_ALLOWED_COMMANDS")]
+      (set (map str/trim (str/split env #","))))
+    (load-from-file (or (get-env "SHELL_ALLOWED_COMMANDS_FILE") ".shell_allowed_commands"))
+    default-allowed-commands))
+
+(def ^:private allowed-commands
+  (load-allowed-commands))
 
 (defn- allowed? [command]
   (let [program (first (str/split (str/trim command) #"\s+"))]

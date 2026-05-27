@@ -122,12 +122,25 @@ llm.clj
 - `src/copilot_cli.clj` — GitHub Copilot CLI Integration
 - `.env.example` — Beispielvariablen
 
+## Konfiguration
+
+| Umgebungsvariable            | Beschreibung                                                             | Default              |
+|------------------------------|--------------------------------------------------------------------------|----------------------|
+| `GITHUB_TOKEN`               | GitHub Personal Access Token                                             | —                    |
+| `GITHUB_MODELS_MODEL`        | GitHub Models Modell                                                     | `gpt-4o-mini`        |
+| `SHELL_ALLOWED_COMMANDS`     | Komma-separierte Allowlist für `shell_execute` (überschreibt Datei)     | `ls,find,cat,...`    |
+| `SHELL_ALLOWED_COMMANDS_FILE`| Pfad zu Datei mit Allowlist (ein Programm pro Zeile)                    | `.shell_allowed_commands` |
+
+Ladereihenfolge: `SHELL_ALLOWED_COMMANDS` → `SHELL_ALLOWED_COMMANDS_FILE` → `.shell_allowed_commands` → Default
+
 ## Sicherheitshinweis
 
 Das Tool `shell_execute` ist mit zwei Sicherheitsstufen abgesichert:
 
-1. **Allowlist**: Folgende Programme werden direkt ohne Rückfrage ausgeführt:
-   `ls`, `find`, `cat`, `grep`, `echo`, `curl`, `git`, `gh`, `bb`, `pwd`, `env`, `which`, `date`
+1. **Allowlist**: Erlaubte Programme werden in folgender Reihenfolge geladen:
+   - Umgebungsvariable `SHELL_ALLOWED_COMMANDS` (Komma-separiert)
+   - Datei `SHELL_ALLOWED_COMMANDS_FILE` oder `.shell_allowed_commands` (ein Programm pro Zeile)
+   - Default: `ls`, `find`, `cat`, `grep`, `echo`, `curl`, `git`, `gh`, `bb`, `pwd`, `env`, `which`, `date`
 
 2. **Human-in-the-Loop**: Alle anderen Programme lösen eine interaktive Bestätigungsaufforderung aus.
    Der Agent kann keinen unbekannten Befehl ohne explizite Zustimmung des Benutzers ausführen.
