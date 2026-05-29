@@ -19,10 +19,14 @@
                                         :description "The shell command to execute"}}
                  :required ["command"]}}
    {:name "memory_search"
-    :description "Search past events in memory"
+    :description "Search past events in memory. Use cross-session to search across all sessions."
     :parameters {:type "object"
-                 :properties {:query {:type "string"}
-                              :event-type {:type "string"}}
+                 :properties {:query         {:type "string"
+                                              :description "The search query"}
+                              :event-type    {:type "string"
+                                              :description "Optional event type filter"}
+                              :cross-session {:type "boolean"
+                                              :description "If true, search across all sessions (global memory)"}}
                  :required ["query"]}}
    {:name "file_read"
     :description "Read the contents of a file at the given path"
@@ -124,12 +128,12 @@
       (catch Exception e
         {:written false :error (.getMessage e) :exit 1}))))
 
-(defn- memory-search [{:keys [query event-type]}]
+(defn- memory-search [{:keys [query event-type cross-session]}]
   (let [normalized-event-type (cond
                                 (keyword? event-type) event-type
                                 (and (string? event-type) (not (str/blank? event-type))) (keyword event-type)
                                 :else nil)]
-    {:matches (events/get-events-by-query (or query "") normalized-event-type)}))
+    {:matches (events/get-events-by-query (or query "") normalized-event-type (boolean cross-session))}))
 
 (defn- execute-tool [{:keys [name arguments]}]
   (case name
