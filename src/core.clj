@@ -1,6 +1,7 @@
 (ns core
   (:require [clojure.string :as str]
             [events :as events]
+            [export :as export]
             [llm :as llm]
             [summarizer :as summarizer]
             [tools :as tools])
@@ -120,6 +121,40 @@
               (= "summarize" trimmed)
               (do
                 (summarizer/summarize!)
+                (recur))
+
+              (= "export" trimmed)
+              (do
+                (export/export!)
+                (recur))
+
+              (= "export all" trimmed)
+              (do
+                (export/export-all!)
+                (recur))
+
+              (str/starts-with? trimmed "export ")
+              (do
+                (export/export! (subs trimmed 7))
+                (recur))
+
+              (str/starts-with? trimmed "import ")
+              (do
+                (export/import! (subs trimmed 7))
+                (recur))
+
+              (= "help" trimmed)
+              (do
+                (println "Verfügbare Befehle:")
+                (println "  sessions        - Alle Sessions auflisten")
+                (println "  stats           - Token-Statistiken der Session")
+                (println "  stats all       - Token-Statistiken aller Sessions")
+                (println "  summarize       - Memory-Kompression ausführen")
+                (println "  export          - Session exportieren (session-id.edn)")
+                (println "  export <datei>  - Session in Datei exportieren")
+                (println "  export all      - Alle Sessions exportieren (memory-backup.edn)")
+                (println "  import <datei>  - Events aus Datei importieren")
+                (println "  exit            - Beenden")
                 (recur))
 
               :else
