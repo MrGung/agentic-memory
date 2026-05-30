@@ -93,6 +93,23 @@
             WHERE session = ? ORDER BY timestamp ASC"
            *session-id*])))
 
+(defn get-latest-summary []
+  (first
+   (mapv row->event
+         (sqlite/query (get-conn)
+           ["SELECT id, session, type, data, timestamp FROM events
+             WHERE session = ? AND type = 'summary'
+             ORDER BY timestamp DESC LIMIT 1"
+            *session-id*]))))
+
+(defn get-events-after [timestamp]
+  (mapv row->event
+        (sqlite/query (get-conn)
+          ["SELECT id, session, type, data, timestamp FROM events
+            WHERE session = ? AND timestamp > ?
+            ORDER BY timestamp ASC"
+           *session-id* timestamp])))
+
 (defn get-events-by-type [event-type]
   (mapv row->event
         (sqlite/query (get-conn)
@@ -118,13 +135,16 @@
            (sqlite/query (get-conn) (into [sql] params))))))
 
 (defn get-context-window [n]
-  (->> (sqlite/query (get-conn)
-         ["SELECT id, session, type, data, timestamp FROM events
-           WHERE session = ? ORDER BY timestamp DESC LIMIT ?"
-          *session-id* n])
-       (map row->event)
-       reverse
-       vec))
+  (if-let [summary (get-latest-summary)]
+    (let [newer-events (get-events-after (:event/timestamp summary))]
+      (into [summary] newer-events))
+    (->> (sqlite/query (get-conn)
+           ["SELECT id, session, type, data, timestamp FROM events
+             WHERE session = ? ORDER BY timestamp DESC LIMIT ?"
+            *session-id* n])
+         (map row->event)
+         reverse
+         vec)))
 
 (defn list-sessions []
   (->> (sqlite/query (get-conn)

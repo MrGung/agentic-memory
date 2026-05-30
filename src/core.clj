@@ -2,6 +2,7 @@
   (:require [clojure.string :as str]
             [events :as events]
             [llm :as llm]
+            [summarizer :as summarizer]
             [tools :as tools])
   (:gen-class))
 
@@ -16,6 +17,9 @@
       :assistant-message (let [tool-calls (seq (:tool-calls data))]
                            (cond-> {:role "assistant" :content (or (:text data) "")}
                              tool-calls (assoc :tool_calls (vec tool-calls))))
+      :summary {:role "system"
+                :content (str "Zusammenfassung früherer Konversation: "
+                             (get-in event [:event/data :text]))}
       :tool-result {:role "tool"
                     :tool_call_id (:tool-call-id data)
                     :content (pr-str (:result data))}
@@ -30,6 +34,8 @@
 
 (defn- process-user-message! [input]
   (events/append-event! :user-message {:text input})
+  (when (summarizer/needs-summarization?)
+    (summarizer/summarize!))
   (loop [messages (-> (events/get-context-window 20)
                       context->messages)
          iteration 0]
@@ -78,6 +84,11 @@
                   (println (str "  " (:session s)
                                 "  Events: " (:event_count s)
                                 "  Zuletzt: " (:last_active s))))
+                (recur))
+
+              (= "summarize" trimmed)
+              (do
+                (summarizer/summarize!)
                 (recur))
 
               :else

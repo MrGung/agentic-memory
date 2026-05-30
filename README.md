@@ -78,6 +78,8 @@ Unterstützte Event-Typen:
 - `:assistant-message`
 - `:tool-call`
 - `:tool-result`
+- `:summary`
+- `:llm-usage`
 - `:error`
 
 ## Sessions
@@ -95,6 +97,12 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 |--------------|-------------------------------------|
 | `sessions`   | Alle bisherigen Sessions auflisten  |
 | `exit`       | Session beenden                     |
+| `summarize`  | Manuelle Kompression der Session    |
+
+## Memory-Kompression
+
+Ab 50 relevanten Events wird die Konversation automatisch komprimiert.
+Die Originaldaten bleiben erhalten (Soft-Kompression).
 
 ### Cross-Session Gedächtnis
 
