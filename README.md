@@ -100,6 +100,35 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | `stats all`  | Verbrauchsstatistiken über alle Sessions |
 | `exit`       | Session beenden                     |
 | `summarize`  | Manuelle Kompression der Session    |
+| `export`     | Aktuelle Session exportieren (`session-id.edn`) |
+| `export <datei>` | Aktuelle Session in bestimmte Datei exportieren |
+| `export all` | Alle Sessions exportieren (`memory-backup.edn`) |
+| `import <datei>` | Events aus EDN-Datei in aktuelle Session laden |
+| `help`       | Alle Befehle anzeigen               |
+
+## Export & Import
+
+Sessions können als EDN-Dateien gesichert und wiederhergestellt werden.
+
+### Befehle
+
+| Befehl              | Beschreibung                                    |
+|---------------------|-------------------------------------------------|
+| `export`            | Aktuelle Session exportieren (`session-id.edn`) |
+| `export <datei>`    | Aktuelle Session in bestimmte Datei exportieren |
+| `export all`        | Alle Sessions exportieren (`memory-backup.edn`) |
+| `import <datei>`    | Events aus EDN-Datei in aktuelle Session laden  |
+| `help`              | Alle Befehle anzeigen                           |
+
+### Beispiel
+
+```bash
+you> export mein-backup.edn
+[export] 42 Events exportiert nach: mein-backup.edn
+
+you> import mein-backup.edn
+[import] 42 von 42 Events importiert aus: mein-backup.edn
+```
 
 ## Memory-Kompression
 
