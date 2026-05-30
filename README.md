@@ -94,11 +94,37 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | Befehl       | Beschreibung                        |
 |--------------|-------------------------------------|
 | `sessions`   | Alle bisherigen Sessions auflisten  |
+| `stats`      | Verbrauchsstatistiken der aktuellen Session |
+| `stats all`  | Verbrauchsstatistiken über alle Sessions |
 | `exit`       | Session beenden                     |
 
 ### Cross-Session Gedächtnis
 
 Das Tool `memory_search` kann mit `cross-session: true` über alle Sessions suchen — so hat der Agent Zugriff auf sein gesamtes Langzeitgedächtnis.
+
+## Analyse & Statistiken
+
+Der Agent speichert für jeden erfolgreichen LLM-Request ein `:llm-usage` Event mit:
+
+- Modellname
+- Prompt-, Completion- und Gesamt-Token
+- Größe des Kontextfensters (`context-messages`)
+- Request-Typ (`:chat` oder `:chat-with-tools`)
+
+Beispielausgabe für `stats`:
+
+```text
+────────────────────────────────────────
+📊 Session: mein-projekt
+────────────────────────────────────────
+Requests:         12
+Tokens gesamt:    4200
+  ├ Prompt:       3100
+  └ Completion:   1100
+Kontext ⌀:        18.3 Messages
+Kontext max:      25 Messages
+────────────────────────────────────────
+```
 
 ## Event Store
 

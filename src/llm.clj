@@ -27,14 +27,29 @@
     (events/append-event! :error {:source :llm :message message :details details})
     (catch Exception _ nil)))
 
+(defn- log-usage! [response request-type messages]
+  (try
+    (let [prompt-tokens (or (get-in response [:body :usage :prompt_tokens]) 0)
+         completion-tokens (or (get-in response [:body :usage :completion_tokens]) 0)
+         total-tokens (or (get-in response [:body :usage :total_tokens]) 0)]
+     (events/append-event! :llm-usage {:model (or (get-in response [:body :model]) (model-name))
+                                       :prompt-tokens prompt-tokens
+                                       :completion-tokens completion-tokens
+                                       :total-tokens total-tokens
+                                       :context-messages (count messages)
+                                       :request-type request-type}))
+    (catch Exception _ nil)))
+
 (defn chat
   ([messages] (chat messages {}))
   ([messages {:keys [model]}]
    (try
-     (let [response (request! {:model (or model (model-name))
-                               :messages messages})
+     (let [selected-model (or model (model-name))
+          response (request! {:model selected-model
+                              :messages messages})
            message (get-in response [:body :choices 0 :message :content])]
-       {:ok true :content message :raw response})
+      (log-usage! response :chat messages)
+      {:ok true :content message :raw response})
      (catch Exception e
        (let [details (or (ex-data e) {:message (.getMessage e)})]
          (log-error! "LLM chat request failed" details)
@@ -44,11 +59,13 @@
   ([messages tools] (chat-with-tools messages tools {}))
   ([messages tools {:keys [model]}]
    (try
-     (let [response (request! {:model (or model (model-name))
-                               :messages messages
-                               :tools tools})
+     (let [selected-model (or model (model-name))
+          response (request! {:model selected-model
+                              :messages messages
+                              :tools tools})
            message (get-in response [:body :choices 0 :message])]
-       {:ok true :message message :raw response})
+      (log-usage! response :chat-with-tools messages)
+      {:ok true :message message :raw response})
      (catch Exception e
        (let [details (or (ex-data e) {:message (.getMessage e)})]
          (log-error! "LLM tool chat request failed" details)
