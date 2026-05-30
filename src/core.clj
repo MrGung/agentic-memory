@@ -61,6 +61,27 @@
                 (recur next-messages (inc iteration)))
               (println (if (str/blank? content) "[no content]" content)))))))))
 
+(defn- print-stats! [cross-session?]
+  (let [stats (events/get-usage-stats cross-session?)
+        title (if cross-session?
+               "📊 Alle Sessions (gesamt)"
+               (str "📊 Session: " events/*session-id*))]
+    (println "────────────────────────────────────────")
+    (println title)
+    (println "────────────────────────────────────────")
+    (println (format "Requests:         %d" (:total-requests stats)))
+    (println (format "Tokens gesamt:    %d" (:total-tokens stats)))
+    (println (format "  ├ Prompt:       %d" (:total-prompt stats)))
+    (println (format "  └ Completion:   %d" (:total-completion stats)))
+    (println (format "Kontext ⌀:        %.1f Messages" (:avg-context-size stats)))
+    (println (format "Kontext max:      %d Messages" (:max-context-size stats)))
+    (when cross-session?
+      (println "────────────────────────────────────────")
+      (println "Pro Session:")
+      (doseq [{:keys [session requests tokens]} (:by-session stats)]
+        (println (format "  %-16s %4d req   %d tokens" session requests tokens))))
+    (println "────────────────────────────────────────")))
+
 (defn -main [& [session-name]]
   (let [session-id (or session-name (str (java.util.UUID/randomUUID)))]
     (binding [events/*session-id* session-id]
@@ -84,6 +105,16 @@
                   (println (str "  " (:session s)
                                 "  Events: " (:event_count s)
                                 "  Zuletzt: " (:last_active s))))
+                (recur))
+
+              (= "stats" trimmed)
+              (do
+                (print-stats! false)
+                (recur))
+
+              (= "stats all" trimmed)
+              (do
+                (print-stats! true)
                 (recur))
 
               (= "summarize" trimmed)

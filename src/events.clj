@@ -156,3 +156,40 @@
   (sqlite/execute!
    (get-conn)
    ["DELETE FROM events WHERE session = ?" session-id]))
+
+(defn get-usage-stats
+  ([] (get-usage-stats false))
+  ([cross-session?]
+   (let [sql (str "SELECT session, data FROM events WHERE type = ? "
+                  (when-not cross-session? "AND session = ?"))
+         params (cond-> ["llm-usage"]
+                  (not cross-session?) (conj *session-id*))
+         rows (sqlite/query (get-conn) (into [sql] params))
+         usage-events (map (fn [row]
+                             (assoc row :data (edn/read-string (:data row))))
+                           rows)
+         total-requests (count usage-events)
+         total-tokens (reduce + 0 (map #(or (get-in % [:data :total-tokens]) 0) usage-events))
+         total-prompt (reduce + 0 (map #(or (get-in % [:data :prompt-tokens]) 0) usage-events))
+         total-completion (reduce + 0 (map #(or (get-in % [:data :completion-tokens]) 0) usage-events))
+         context-sizes (map #(or (get-in % [:data :context-messages]) 0) usage-events)
+         avg-context-size (if (pos? total-requests)
+                            (/ (double (reduce + 0 context-sizes)) total-requests)
+                            0.0)
+         max-context-size (if (seq context-sizes) (apply max context-sizes) 0)
+         by-session (->> usage-events
+                         (group-by :session)
+                         (map (fn [[session session-events]]
+                                {:session session
+                                 :requests (count session-events)
+                                 :tokens (reduce + 0 (map #(or (get-in % [:data :total-tokens]) 0)
+                                                          session-events))}))
+                         (sort-by (juxt (comp - :tokens) :session))
+                         vec)]
+     {:total-requests total-requests
+      :total-tokens total-tokens
+      :total-prompt total-prompt
+      :total-completion total-completion
+      :avg-context-size avg-context-size
+      :max-context-size max-context-size
+      :by-session by-session})))
