@@ -108,3 +108,59 @@
       (events/append-event! :user-message {:text "test"}))
     (let [sessions (events/list-sessions)]
       (is (>= (count sessions) 2)))))
+
+(deftest test-usage-stats
+  (testing "Usage-Statistiken aggregieren korrekt innerhalb einer Session"
+    (events/init-db!)
+    (events/append-event! :llm-usage {:model "gpt-4o-mini"
+                                      :prompt-tokens 100
+                                      :completion-tokens 40
+                                      :total-tokens 140
+                                      :context-messages 10
+                                      :request-type :chat})
+    (events/append-event! :llm-usage {:model "gpt-4o-mini"
+                                      :prompt-tokens 50
+                                      :completion-tokens 20
+                                      :total-tokens 70
+                                      :context-messages 20
+                                      :request-type :chat-with-tools})
+    (let [stats (events/get-usage-stats)]
+      (is (= 2 (:total-requests stats)))
+      (is (= 210 (:total-tokens stats)))
+      (is (= 150 (:total-prompt stats)))
+      (is (= 60 (:total-completion stats)))
+      (is (= 15.0 (:avg-context-size stats)))
+      (is (= 20 (:max-context-size stats)))
+      (is (= [{:session "test-session-default"
+               :requests 2
+               :tokens 210}]
+             (:by-session stats))))))
+
+(deftest test-usage-stats-cross-session
+  (testing "Cross-session Usage-Statistiken aggregieren über alle Sessions"
+    (events/init-db!)
+    (binding [events/*session-id* "session-A"]
+      (events/append-event! :llm-usage {:model "gpt-4o-mini"
+                                        :prompt-tokens 30
+                                        :completion-tokens 10
+                                        :total-tokens 40
+                                        :context-messages 6
+                                        :request-type :chat}))
+    (binding [events/*session-id* "session-B"]
+      (events/append-event! :llm-usage {:model "gpt-4o-mini"
+                                        :prompt-tokens 20
+                                        :completion-tokens 5
+                                        :total-tokens 25
+                                        :context-messages 4
+                                        :request-type :chat-with-tools}))
+    (binding [events/*session-id* "session-B"]
+      (let [stats (events/get-usage-stats true)]
+        (is (= 2 (:total-requests stats)))
+        (is (= 65 (:total-tokens stats)))
+        (is (= 50 (:total-prompt stats)))
+        (is (= 15 (:total-completion stats)))
+        (is (= 5.0 (:avg-context-size stats)))
+        (is (= 6 (:max-context-size stats)))
+        (is (= #{{:session "session-A" :requests 1 :tokens 40}
+                 {:session "session-B" :requests 1 :tokens 25}}
+               (set (:by-session stats))))))))
