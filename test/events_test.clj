@@ -76,6 +76,24 @@
       (is (= ["msg-2" "msg-3" "msg-4"]
              (mapv #(get-in % [:event/data :text]) window))))))
 
+(deftest test-get-context-window-with-summary
+  (testing "Kontextfenster nutzt neueste Summary plus neuere Events"
+    (events/init-db!)
+    (events/append-event! :user-message {:text "alt-1"})
+    (events/append-event! :assistant-message {:text "alt-2"})
+    (events/append-event! :summary {:text "Zusammenfassung"
+                                    :covers 2
+                                    :from "2026-05-27T10:00:00Z"
+                                    :to "2026-05-27T11:30:00Z"})
+    (events/append-event! :user-message {:text "neu-1"})
+    (let [window (events/get-context-window 2)]
+      (is (= [:summary :user-message]
+             (mapv :event/type window)))
+      (is (= "Zusammenfassung"
+             (get-in (first window) [:event/data :text])))
+      (is (= "neu-1"
+             (get-in (second window) [:event/data :text]))))))
+
 (deftest test-session-isolation
   (testing "Events verschiedener Sessions sind isoliert"
     (binding [events/*session-id* "session-A"]
