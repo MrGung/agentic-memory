@@ -1,14 +1,12 @@
 (ns core
   (:require [clojure.string :as str]
+            [config :as config]
             [events :as events]
             [export :as export]
             [llm :as llm]
             [summarizer :as summarizer]
             [tools :as tools])
   (:gen-class))
-
-(def ^:private system-prompt
-  "You are an agentic memory assistant. Use tools when needed and return concise final answers.")
 
 (defn- event->message [event]
   (let [event-type (:event/type event)
@@ -30,7 +28,7 @@
   (->> events
        (map event->message)
        (remove nil?)
-       (into [{:role "system" :content system-prompt}])
+       (into [{:role "system" :content (config/build-system-prompt)}])
        vec))
 
 (defn- process-user-message! [input]
@@ -154,7 +152,32 @@
                 (println "  export <datei>  - Session in Datei exportieren")
                 (println "  export all      - Alle Sessions exportieren (memory-backup.edn)")
                 (println "  import <datei>  - Events aus Datei importieren")
+                (println "  instructions    - Aktuelle Instructions anzeigen")
+                (println "  skills          - Geladene Skills auflisten")
                 (println "  exit            - Beenden")
+                (recur))
+
+              (= "instructions" trimmed)
+              (do
+                (let [instr (config/load-instructions)]
+                  (if instr
+                    (println instr)
+                    (println (str "[config] Keine Instructions gefunden.\n"
+                                  "  Global:     " config/global-instructions-path "\n"
+                                  "  Repository: " config/repo-instructions-path))))
+                (recur))
+
+              (= "skills" trimmed)
+              (do
+                (let [skills (config/load-skills)]
+                  (if (empty? skills)
+                    (println (str "[config] Keine Skills gefunden.\n"
+                                  "  Global:     " config/global-skills-dir "/<name>/SKILL.md\n"
+                                  "  Repository: " config/repo-skills-dir "/<name>/SKILL.md"))
+                    (do
+                      (println (str "\n📦 Geladene Skills (" (count skills) ")\n"))
+                      (doseq [[n _] (sort skills)]
+                        (println (str "  • " n))))))
                 (recur))
 
               :else
