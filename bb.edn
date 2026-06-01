@@ -10,6 +10,8 @@
         :task (exec 'core/-main-dream)}
   memory {:doc "Langzeit-Gedächtnis anzeigen"
          :task (exec 'core/-main-memory)}
+  install-plugin {:doc "Copilot CLI Plugin installieren"
+                 :task (shell "bash scripts/install_plugin.sh")}
   repl {:doc "Start a Babashka REPL"
         :task (exec 'clojure.main/main ["-r"])}
   test {:doc "Run all tests"

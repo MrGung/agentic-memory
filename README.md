@@ -36,6 +36,35 @@ bb tasks
 
 ## GitHub Copilot CLI Integration
 
+### Copilot CLI Plugin (native Tools)
+
+Das Plugin exponiert Memory als native Copilot CLI Tools — bidirektional und während der gesamten Session nutzbar.
+
+### Installation
+
+```bash
+bb run install-plugin
+export MEMORY_DB="$HOME/.agentic-memory/memory.db"
+```
+
+### Verfügbare Tools
+
+| Tool | Beschreibung |
+|------|-------------|
+| `memory_search` | Vergangene Events und Langzeit-Gedächtnis durchsuchen |
+| `memory_add` | Fakt oder Entscheidung ins Langzeit-Gedächtnis aufnehmen |
+| `memory_list` | Gesamtes Langzeit-Gedächtnis auflisten |
+| `memory_session_end` | Session beenden, bereit für Dream-Konsolidierung |
+
+### Vergleich: Plugin vs. Hooks
+
+| | Hooks | Plugin |
+|--|-------|--------|
+| Memory beim Start | ✅ | ✅ |
+| Memory aktiv während Session | ❌ | ✅ |
+| Bidirektional | ❌ | ✅ |
+| Copilot ruft Memory selbst auf | ❌ | ✅ |
+
 ### Hooks (empfohlen)
 
 Hooks laufen automatisch bei jedem Copilot CLI Lifecycle-Event:
@@ -308,6 +337,9 @@ llm.clj
 - `src/dream.clj` — Dream Consolidation + Long-Term-Memory Funktionen
 - `src/tools.clj` — Tool-Definitionen + Dispatcher
 - `src/copilot_cli.clj` — GitHub Copilot CLI Integration
+- `plugin/memory_plugin.clj` — JSON-RPC Plugin für native Copilot CLI Memory-Tools
+- `plugin/manifest.json` — Plugin-Manifest für Copilot CLI
+- `scripts/install_plugin.sh` — Installiert das Plugin nach `~/.copilot/plugins/agentic-memory`
 - `.env.example` — Beispielvariablen
 
 ## Konfiguration
