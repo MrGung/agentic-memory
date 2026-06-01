@@ -23,7 +23,7 @@
                                                     "  \"version\": \"1.0.0\",\n"
                                                     "  \"description\": \"Persistent cross-session memory for GitHub Copilot CLI\",\n"
                                                     "  \"runtime\": \"process\",\n"
-                                                    "  \"command\": \"bb\",\n"
+                                                    "  \"command\": \"b\",\n"
                                                     "  \"args\": [\"%s\"],\n"
                                                     "  \"tools\": [\"memory_search\", \"memory_add\", \"memory_list\", \"memory_session_end\"]\n"
                                                     "}")

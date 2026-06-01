@@ -118,7 +118,7 @@
                       now
                       now
                       now])
-    {:done true :hint "Run 'bb run dream' for memory consolidation"}))
+    {:done true :hint "Run 'b run dream' for memory consolidation"}))
 
 (def tool-definitions
   [{:name        "memory_search"
