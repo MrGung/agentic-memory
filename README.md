@@ -65,11 +65,12 @@ bb test
 Jedes Event wird als EDN-Datenstruktur gespeichert:
 
 ```clojure
-{:event/id        #uuid "..."
- :event/session   "mein-projekt"
- :event/type      :user-message
- :event/timestamp "2026-05-26T..."
- :event/data      {...}}
+{:event/id               #uuid "..."
+ :event/session          "mein-projekt"
+ :event/type             :user-message
+ :event/transaction-time "2026-05-26T..."
+ :event/valid-time       "2026-05-26T..."
+ :event/data             {...}}
 ```
 
 Unterstützte Event-Typen:
@@ -104,7 +105,26 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | `export <datei>` | Aktuelle Session in bestimmte Datei exportieren |
 | `export all` | Alle Sessions exportieren (`memory-backup.edn`) |
 | `import <datei>` | Events aus EDN-Datei in aktuelle Session laden |
+| `history <event-type>` | Verlauf eines Event-Typs anzeigen |
 | `help`       | Alle Befehle anzeigen               |
+
+## Time Model
+
+Jedes Event trägt zwei Zeitstempel, angelehnt an XTDBs bitemporales Modell:
+
+| Field               | Meaning                                              |
+|---------------------|------------------------------------------------------|
+| `:transaction-time` | When the event was written to the DB                 |
+| `:valid-time`       | When the event was factually valid (defaults to transaction-time) |
+
+### Command: `history <event-type>`
+
+```text
+you> history user-message
+📜 History for :user-message (12 entries)
+  2026-05-30T10:00:00Z  {:text "Hello"}
+  2026-05-30T10:01:05Z  {:text "How are you?"}
+```
 
 ## Export & Import
 
@@ -172,7 +192,9 @@ Kontext max:      25 Messages
   - `session` (TEXT)
   - `type` (TEXT)
   - `data` (EDN als TEXT)
-  - `timestamp` (TEXT, ISO-8601)
+  - `transaction_time` (TEXT, ISO-8601)
+  - `valid_time` (TEXT, ISO-8601)
+  - `timestamp` (TEXT, Legacy/Fallback)
 
 Die DB wird automatisch bei Start initialisiert.
 
