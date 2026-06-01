@@ -160,6 +160,19 @@
                                    :type    event-type
                                    :order   :asc}))))
 
+(defn get-recent-events-by-type
+    ([event-type]
+     (get-recent-events-by-type event-type 20 true))
+    ([event-type limit]
+     (get-recent-events-by-type event-type limit true))
+    ([event-type limit cross-session?]
+     (mapv row->event
+        (sqlite/query (get-conn)
+                      (build-query (cond-> {:type  event-type
+                                            :order :desc
+                                            :limit limit}
+                                     (not cross-session?) (assoc :session *session-id*)))))))
+
 (defn get-events-by-query
     ([query event-type]
      (get-events-by-query query event-type false))

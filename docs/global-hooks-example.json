@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "MEMORY_DB=${MEMORY_DB:-$HOME/.agentic-memory/memory.db} bb AGENTIC_MEMORY_PATH/scripts/memory_session_start.clj",
+        "timeoutSec": 5
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "MEMORY_DB=${MEMORY_DB:-$HOME/.agentic-memory/memory.db} bb AGENTIC_MEMORY_PATH/scripts/memory_post_tool.clj",
+        "timeoutSec": 5
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "MEMORY_DB=${MEMORY_DB:-$HOME/.agentic-memory/memory.db} bb AGENTIC_MEMORY_PATH/scripts/memory_session_end.clj",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

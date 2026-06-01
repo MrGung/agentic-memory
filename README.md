@@ -34,6 +34,49 @@ export GITHUB_MODELS_MODEL=gpt-4o-mini
 bb tasks
 ```
 
+## GitHub Copilot CLI Integration
+
+### Hooks (empfohlen)
+
+Hooks laufen automatisch bei jedem Copilot CLI Lifecycle-Event:
+
+| Hook | Wann | Was passiert |
+|------|------|--------------|
+| `sessionStart` | Session-Start | Langzeit-Gedächtnis als Context injiziert |
+| `postToolUse` | Nach jedem Tool | Ergebnis in SQLite gespeichert |
+| `sessionEnd` | Session-Ende | Session markiert, bereit für Dream |
+
+#### Repository-spezifisch (bereits enthalten)
+
+Die Datei `.github/hooks/memory.json` ist bereits im Repo — sie wird automatisch von Copilot CLI geladen.
+
+#### Global (alle Projekte)
+
+```bash
+mkdir -p ~/.copilot/hooks
+sed "s|AGENTIC_MEMORY_PATH|$(pwd)|g" docs/global-hooks-example.json > ~/.copilot/hooks/memory.json
+# MEMORY_DB in Shell-Config setzen:
+echo 'export MEMORY_DB="$HOME/.agentic-memory/memory.db"' >> ~/.zshrc
+```
+
+#### Ablauf
+
+```text
+gh copilot suggest "deploy script schreiben"
+ │
+ ├─ sessionStart  → Lädt Langzeit-Gedächtnis automatisch als Context
+ ├─ [Copilot arbeitet, nutzt Tools]
+ ├─ postToolUse   → Tool-Ergebnisse in SQLite gespeichert
+ └─ sessionEnd    → Session markiert
+
+# Später:
+bb run dream     → Konsolidierung mit Human-in-the-loop
+```
+
+### Skills (manuell)
+
+Alternativ können Skills explizit aufgerufen werden — siehe `~/.copilot/skills/`.
+
 ## Verwendung
 
 ### Interaktiver Agent-Loop starten
