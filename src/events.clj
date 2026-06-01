@@ -226,6 +226,20 @@
      (get-conn)
      ["DELETE FROM events WHERE session = ?" session-id]))
 
+(defn delete-long-term-memory-by-text! [text]
+  (let [trimmed (str/trim (or text ""))]
+    (if (str/blank? trimmed)
+      0
+      (do
+        (sqlite/execute!
+         (get-conn)
+         ["DELETE FROM events
+           WHERE type = 'long-term-memory'
+             AND LOWER(data) LIKE ? ESCAPE '\\'"
+          (like-pattern trimmed)])
+        (let [result (first (sqlite/query (get-conn) ["SELECT changes() AS count"]))]
+          (long (or (:count result) 0)))))))
+
 (defn get-usage-stats
     ([] (get-usage-stats false))
     ([cross-session?]
