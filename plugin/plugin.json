@@ -1,0 +1,13 @@
+{
+  "name": "agentic-memory",
+  "version": "1.0.0",
+  "description": "Persistent cross-session memory for GitHub Copilot CLI",
+  "mcpServers": {
+    "agentic-memory": {
+      "type": "stdio",
+      "command": "b",
+      "args": ["C:/DEV/github/agentic-memory/plugin/memory_plugin.clj"],
+      "tools": ["memory_search", "memory_add", "memory_list", "memory_session_end"]
+    }
+  }
+}

@@ -8,29 +8,34 @@
         :task (exec 'core/-main-dream)}
   memory {:doc "Langzeit-Gedächtnis anzeigen"
          :task (exec 'core/-main-memory)}
-  install-plugin {:doc "Copilot CLI Plugin installieren"
+  install-plugin {:doc "Copilot CLI Plugin installieren (via 'copilot plugin install')"
                  :requires ([babashka.fs :as fs]
+                            [babashka.process :refer [shell]]
                             [clojure.string :as str])
-                 :task (let [home       (System/getProperty "user.home")
-                             plugin-dir (str home "/.copilot/plugins/agentic-memory")
-                             repo-dir   (str (fs/canonicalize "."))
+                 :task (let [repo-dir    (str (fs/canonicalize "."))
                              script-path (str/replace
                                           (str repo-dir "/plugin/memory_plugin.clj")
                                           "\\" "/")
-                             manifest   (str plugin-dir "/manifest.json")
-                             content    (format (str "{\n"
-                                                    "  \"name\": \"agentic-memory\",\n"
-                                                    "  \"version\": \"1.0.0\",\n"
-                                                    "  \"description\": \"Persistent cross-session memory for GitHub Copilot CLI\",\n"
-                                                    "  \"runtime\": \"process\",\n"
-                                                    "  \"command\": \"b\",\n"
-                                                    "  \"args\": [\"%s\"],\n"
-                                                    "  \"tools\": [\"memory_search\", \"memory_add\", \"memory_list\", \"memory_session_end\"]\n"
-                                                    "}")
-                                               script-path)]
-                         (fs/create-dirs plugin-dir)
-                         (spit manifest content)
-                         (println "✅ Plugin installiert:" manifest)
+                             plugin-dir  (str repo-dir "/plugin")
+                             plugin-json (str plugin-dir "/plugin.json")
+                             content     (format (str "{\n"
+                                                      "  \"name\": \"agentic-memory\",\n"
+                                                      "  \"version\": \"1.0.0\",\n"
+                                                      "  \"description\": \"Persistent cross-session memory for GitHub Copilot CLI\",\n"
+                                                      "  \"mcpServers\": {\n"
+                                                      "    \"agentic-memory\": {\n"
+                                                      "      \"type\": \"stdio\",\n"
+                                                      "      \"command\": \"b\",\n"
+                                                      "      \"args\": [\"%s\"],\n"
+                                                      "      \"tools\": [\"memory_search\", \"memory_add\", \"memory_list\", \"memory_session_end\"]\n"
+                                                      "    }\n"
+                                                      "  }\n"
+                                                      "}")
+                                                 script-path)]
+                         (spit plugin-json content)
+                         (println "📝 plugin.json geschrieben:" plugin-json)
+                         (shell "copilot" "plugin" "install" plugin-dir)
+                         (println "✅ Plugin installiert via: copilot plugin install" plugin-dir)
                          (when-not (System/getenv "MEMORY_DB")
                            (println "")
                            (println "⚠️  MEMORY_DB nicht gesetzt. Empfehlung:")
