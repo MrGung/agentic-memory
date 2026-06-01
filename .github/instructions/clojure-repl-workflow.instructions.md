@@ -11,16 +11,15 @@ description: 'REPL setup for babashka-scripts. Start commands and connection det
 
 ```
 Run: clj-nrepl-eval --discover-ports
- ├─ Port found  →  use clj-nrepl-eval -p <port> for ALL evals. Never use bb.
- └─ No port     →  STOP. Tell user to start:  bb nrepl-server 1667
-                   Do NOT use `bb` as fallback.
+ ├─ Port found  →  use clj-nrepl-eval -p <port> for ALL evals. Never use b.
+ └─ No port     →  STOP. Tell user to start:  b nrepl-server 1667
+                   Do NOT use `b` as fallback.
 ```
 
 ## Start nREPL
 
 ```shell
-bb nrepl-server 1667                  # plain Babashka
-start_bb_nREPL_for_cursive.bat        # Cursive / IntelliJ
+b nrepl-server 1667                  # plain Babashka
 ```
 
 ```shell
@@ -30,7 +29,7 @@ clj-nrepl-eval -p 1667 "(+ 1 1)"     # smoke-test → 2
 
 ## References
 
-- Global `interactive-programming.instructions.md` — full rules, `bb` anti-patterns, incremental eval
+- Global `interactive-programming.instructions.md` — full rules, `b` anti-patterns, incremental eval
 - Global `clojure-repl-eval.instructions.md` — nREPL tool reference
 - Global `clojure-parens-repair.instructions.md` — paren repair
 - `babashka-scripting.instructions.md` — API pattern, TDD, conventions

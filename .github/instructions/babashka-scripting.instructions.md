@@ -31,31 +31,6 @@ Root segments = domain area (`online.paas.*`, `github.*`, `common.*`). CLI entry
 (ns common.logging)                 ;; shared util
 ```
 
-## API / Service Client Pattern
-
-Every service/API client: **four files** — mandatory.
-
-```
-src/<domain>/<service>/core.clj        ← bootstrap! + thin API wrappers
-src/<domain>/<service>/specs.clj       ← Malli schemas for all public fns
-src/<domain>/<service>/repl.clj        ← (comment ...) blocks only
-test/<domain>/<service>/core_test.clj  ← unit tests for pure fns
-```
-
-- `core.clj`: no `(comment ...)`, one-liner docstrings only, no type tables
-- `specs.clj`: see `malli-specs.instructions.md`
-- `repl.clj`: no top-level side effects, calls into `core.clj` only
-- `core_test.clj`: pure fns only — no network/external processes
-
-```clojure
-;; ✅ Correct
-src/online/personaldaten/beschaeftigungen/core.clj
-src/online/personaldaten/beschaeftigungen/repl.clj
-test/online/personaldaten/beschaeftigungen/core_test.clj
-
-;; ❌ Avoid — (comment ...) blocks in core.clj
-```
-
 ## TDD — Mandatory
 
 All new namespaces: test-first. No exceptions.
@@ -74,26 +49,14 @@ feat(<scope>): add <namespace-name>       ← test + impl together (preferred)
 
 ## REPL-Driven Development
 
-Develop + verify in REPL first, then write to file. `clj-nrepl-eval` only — never `bb -e`/`bb -m`/`bb script.clj`.
+Develop + verify in REPL first, then write to file. `clj-nrepl-eval` only — never `b -e`/`b -m`/`b script.clj`.
 
 → `clojure-repl-workflow.instructions.md`
 
 ```shell
-bb nrepl-server 1667                  # start
+b nrepl-server 1667                  # start
 clj-nrepl-eval --discover-ports       # verify
 ```
-
-## Common Utility Namespaces — Reuse
-
-| Namespace          | Purpose                        |
-|--------------------|--------------------------------|
-| `common.logging`   | `taoensso.timbre` wrappers     |
-| `common.time`      | Date/time helpers              |
-| `common.colls`     | Collection utilities           |
-| `common.stopwatch` | Timing / benchmarking          |
-| `common.ns`        | Namespace introspection        |
-
-Prefer these over new utils. Add to `common.*` when needed in 2+ scripts.
 
 ## Dependencies — Offline-First
 
@@ -116,72 +79,9 @@ All Clojure-ecosystem deps (Clojars) as `local/root` in `bb.edn`. Maven Central 
 {medley/medley {:mvn/version "1.3.0"}}
 ```
 
-**Dependency-Status prüfen:**
-```shell
-bb deps:status   # Übersicht: welche Deps lokal/Maven/Clojars, welche fehlen
-bb deps:verify   # Bricht ab wenn :local/root-Pfade nicht existieren
-```
-
-**Neue Abhängigkeit hinzufügen (Clojars):**
-1. JAR außerhalb DATEV-Netz herunterladen (Heimnetz / VPN-Ausnahme)
-2. In `deps/` ablegen oder `.m2`-Pfad referenzieren
-3. `:local/root` Eintrag in `bb.edn` hinzufügen
-4. `bb deps:verify` ausführen
-
-### Fat JARs — no POM
-
-`bb` reads POMs from `:local/root` JARs. Fat JAR with `META-INF/maven/` → bb tries Maven resolution → timeout in corporate net.
-
-**Rule:** Fat JARs must not contain `META-INF/maven/` or `META-INF/leiningen/`.
-
-```
-1. Unpack jar to temp dir
-2. Delete META-INF/maven/ and META-INF/leiningen/
-3. Add extra sources (adapters, shims) if needed
-4. Repack: jar cf fat-mylib.jar .
-```
-
-Example: `deps/fat-martian.jar` = martian + babashka-http-client adapter + `babashka.json` shim, no POM.
-
-New dep: vendor under `deps/` or reference local `.m2`, then add to `bb.edn`.
-
-## Pods — Local Binaries Only
-
-No internet fetch. Use loaders in `pods/`:
-
-```clojure
-(require '[pods.core :as pods])
-(pods/load-etaoin)                       ;; named convenience fn (preferred)
-(pods/load-pod "./pods/some-pod.exe")    ;; fallback: direct path
-```
-
-New pod → add `load-<name>` fn to `pods/core.clj`.
-
-## Working Directory Assertion
-
-```clojure
-(assert-cwd)  ;; throws if cwd ≠ c:\DEV\personal\babashka-scripts
-```
-
-Defined in `bb.edn :init`.
-
-## Available Tools
-
-| Tool          | Available | Note                            |
-|---------------|-----------|---------------------------------|
-| `bb`          | yes       | prefer for scripting            |
-| `node`/`npm`  | yes       | JS snippets, JAR analysis       |
-| `java`/`jar`  | yes       | JDK 21, JAR manipulation        |
-| `git`, `gh`   | yes       |                                 |
-| `python`      | **NO**    | not installed — never use       |
-
-Never `python`/`pip`. Use `node` or `bb` instead.
 
 ## References
 
-- Global `babashka-scripting.instructions.md` — full Babashka patterns
-- Global `prefer-babashka-for-scripts.instructions.md` — bb vs PowerShell
 - `quickdoc-links.instructions.md` — docstring formatting
 - `malli-specs.instructions.md` — Malli schemas
-- `agent-skill-design.instructions.md` — REPL/CLI/MCP decision; Dual Interface Pattern; CLI output conventions
 - `bb.edn` — authoritative task and dep list

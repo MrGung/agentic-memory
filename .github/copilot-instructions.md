@@ -3,7 +3,8 @@
 Dies ist ein **Babashka/Clojure**-Repository. Alle Skripte und Automatisierung
 verwenden Babashka (`b`) als primäre Laufzeit.
 
-Woanders (z.B. in anderen Instructions) wird `bb` verwendet - das ist hier aber nicht relevant!
+Es muss immer `b` verwendet werden, auch wenn `bb` erwähnt wird!
+
 
 ## Essentielle Regeln (gelten IMMER)
 
@@ -34,4 +35,3 @@ Woanders (z.B. in anderen Instructions) wird `bb` verwendet - das ist hier aber 
 | `clojure-repl-workflow.instructions.md` | Decision Tree, REPL-Start, Debugging-Tipps |
 | `babashka-scripting.instructions.md` | Projektstruktur, Konventionen, TDD, API-Client-Pattern |
 | `malli-specs.instructions.md` | Malli-Schemas für Funktionsverträge |
-| `quickdoc-links.instructions.md` | Docstring-Formatierung für API.md |
