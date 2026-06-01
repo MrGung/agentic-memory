@@ -226,19 +226,40 @@
      (get-conn)
      ["DELETE FROM events WHERE session = ?" session-id]))
 
+(defn count-events-before [event-type timestamp]
+    (let [row (first (sqlite/query (get-conn)
+                                  ["SELECT COUNT(*) AS count
+                                    FROM events
+                                    WHERE type = ?
+                                      AND COALESCE(valid_time, timestamp) <= ?"
+                                   (event-type->db-value event-type)
+                                   (str timestamp)]))]
+     (or (:count row) 0)))
+
+(defn delete-events-before! [event-type timestamp]
+    (let [deleted (count-events-before event-type timestamp)]
+     (sqlite/execute!
+      (get-conn)
+      ["DELETE FROM events
+        WHERE type = ?
+          AND COALESCE(valid_time, timestamp) <= ?"
+       (event-type->db-value event-type)
+       (str timestamp)])
+     deleted))
+
 (defn delete-long-term-memory-by-text! [text]
-  (let [trimmed (str/trim (or text ""))]
-    (if (str/blank? trimmed)
-      0
-      (do
-        (sqlite/execute!
-         (get-conn)
-         ["DELETE FROM events
-           WHERE type = 'long-term-memory'
-             AND LOWER(data) LIKE ? ESCAPE '\\'"
-          (like-pattern trimmed)])
-        (let [result (first (sqlite/query (get-conn) ["SELECT changes() AS count"]))]
-          (long (or (:count result) 0)))))))
+    (let [trimmed (str/trim (or text ""))]
+      (if (str/blank? trimmed)
+        0
+        (do
+          (sqlite/execute!
+           (get-conn)
+           ["DELETE FROM events
+             WHERE type = 'long-term-memory'
+               AND LOWER(data) LIKE ? ESCAPE '\\'"
+            (like-pattern trimmed)])
+          (let [result (first (sqlite/query (get-conn) ["SELECT changes() AS count"]))]
+            (long (or (:count result) 0)))))))
 
 (defn get-usage-stats
     ([] (get-usage-stats false))
