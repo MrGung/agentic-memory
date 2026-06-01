@@ -293,6 +293,25 @@ you> memory
 
 `conflicts` analysiert alle Long-Term-Memory-Einträge auf Widersprüche und führt interaktiv durch die Auflösung (`a`, `b`, `both`, `merge`, `skip`).
 
+### Konflikt-Erkennung während des Träumens
+
+Beim `dream`-Befehl prüft das System vor jeder Übernahme eines Vorschlags,
+ob er mit bestehenden Einträgen im Widerspruch steht:
+
+```text
+Dream-Vorschlag 3/5:
+"Wir nutzen GitHub Actions für CI/CD"
+
+⚠️  Konflikt mit bestehendem Eintrag:
+Bestehend: "Wir nutzen CircleCI für CI/CD"
+Neu:       "Wir nutzen GitHub Actions für CI/CD"
+⚡ Widersprüchliche CI/CD-Tools
+
+[n] Neu  [a] Alt behalten  [m] Merge  [b] Beide  [s] Skip
+Auswahl> m
+✅ Zusammengeführt: Wir haben von CircleCI auf GitHub Actions migriert.
+```
+
 ```text
 you> conflicts
 ⚠️  1 Widerspruch gefunden:
