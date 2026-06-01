@@ -5,6 +5,7 @@
             [export :as export]
             [llm :as llm]
             [summarizer :as summarizer]
+            [ttl :as ttl]
             [tools :as tools])
   (:gen-class))
 
@@ -161,10 +162,33 @@
                                  (pr-str (:event/data row)))))))
       (println "Keine Langzeit-Gedächtnis-Einträge gefunden."))))
 
+(defn- print-ttl-status! []
+  (let [{:keys [ttl-days expired-by-type total-expired]} (ttl/ttl-status)]
+    (println "[ttl] Konfiguration:")
+    (doseq [[event-type days] ttl-days]
+      (println (str "  " (name event-type) ": " (if (nil? days) "∞" (str days " Tage")))))
+    (println "[ttl] Abgelaufene Events:")
+    (doseq [[event-type count] expired-by-type]
+      (println (str "  " (name event-type) ": " count)))
+    (println (str "[ttl] Gesamt: " total-expired))))
+
+(defn- confirm-yes? [answer]
+  (contains? #{"j" "y" "yes"}
+             (-> (or answer "")
+                 str/trim
+                 str/lower-case)))
+
+(defn- auto-purge-enabled? []
+  (= "true" (some-> (System/getenv "AUTO_PURGE")
+                    str/trim
+                    str/lower-case)))
+
 (defn -main [& [session-name]]
   (let [session-id (or session-name (str (java.util.UUID/randomUUID)))]
     (binding [events/*session-id* session-id]
       (events/init-db!)
+      (when (auto-purge-enabled?)
+        (println (str "[ttl] AUTO_PURGE aktiv. Gelöschte Events: " (ttl/purge!))))
       (.addShutdownHook (Runtime/getRuntime)
                         (Thread. #(println "\nGraceful shutdown (Ctrl+C).")))
       (println (str "Agentic Memory gestartet. Session: " session-id))
@@ -209,6 +233,28 @@
               (= "memory" trimmed)
               (do
                 (print-long-term-memory!)
+                (recur))
+
+              (= "ttl" trimmed)
+              (do
+                (print-ttl-status!)
+                (recur))
+
+              (= "purge" trimmed)
+              (do
+                (let [{:keys [expired-by-type total-expired]} (ttl/purge-dry-run!)]
+                  (if (zero? total-expired)
+                    (println "[ttl] Keine abgelaufenen Events gefunden.")
+                    (do
+                      (println "[ttl] Abgelaufene Events (Vorschau):")
+                      (doseq [[event-type count] expired-by-type]
+                        (println (str "  " (name event-type) ": " count)))
+                      (println (str "[ttl] Gesamt: " total-expired))
+                      (print "[ttl] Wirklich löschen? [j/N] ")
+                      (flush)
+                      (if (confirm-yes? (read-line))
+                        (println (str "[ttl] Gelöschte Events: " (ttl/purge!)))
+                        (println "[ttl] Abgebrochen.")))))
                 (recur))
 
               (= "promote" trimmed)
@@ -256,6 +302,8 @@
                 (println "  dream           - Dream-Konsolidierung vorschlagen")
                 (println "  promote <text>  - Text manuell ins Langzeit-Gedächtnis übernehmen")
                 (println "  memory          - Langzeit-Gedächtnis anzeigen")
+                (println "  ttl             - TTL-Konfiguration und abgelaufene Events anzeigen")
+                (println "  purge           - Abgelaufene Events löschen (mit Bestätigung)")
                 (println "  export          - Session exportieren (session-id.edn)")
                 (println "  export <datei>  - Session in Datei exportieren")
                 (println "  export all      - Alle Sessions exportieren (memory-backup.edn)")

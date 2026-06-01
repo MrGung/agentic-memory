@@ -226,6 +226,27 @@
      (get-conn)
      ["DELETE FROM events WHERE session = ?" session-id]))
 
+(defn count-events-before [event-type timestamp]
+    (let [row (first (sqlite/query (get-conn)
+                                  ["SELECT COUNT(*) AS count
+                                    FROM events
+                                    WHERE type = ?
+                                      AND COALESCE(valid_time, timestamp) <= ?"
+                                   (event-type->db-value event-type)
+                                   (str timestamp)]))]
+     (or (:count row) 0)))
+
+(defn delete-events-before! [event-type timestamp]
+    (let [deleted (count-events-before event-type timestamp)]
+     (sqlite/execute!
+      (get-conn)
+      ["DELETE FROM events
+        WHERE type = ?
+          AND COALESCE(valid_time, timestamp) <= ?"
+       (event-type->db-value event-type)
+       (str timestamp)])
+     deleted))
+
 (defn get-usage-stats
     ([] (get-usage-stats false))
     ([cross-session?]
