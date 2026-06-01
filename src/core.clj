@@ -1,12 +1,26 @@
 (ns core
   (:require [clojure.string :as str]
-            [config :as config]
+            [dream :as dream]
             [events :as events]
             [export :as export]
             [llm :as llm]
             [summarizer :as summarizer]
             [tools :as tools])
   (:gen-class))
+
+(def ^:private system-prompt
+  "You are an agentic memory assistant. Use tools when needed and return concise final answers.")
+
+(defn- long-term-memory->message []
+  (let [memory (dream/get-long-term-memory)
+        content (if (seq memory)
+                  (str "Langzeit-Gedächtnis (cross-session):\n"
+                       (->> memory
+                            (map-indexed (fn [idx {:keys [text source]}]
+                                           (str (inc idx) ". [" (name source) "] " text)))
+                            (str/join "\n")))
+                  "Langzeit-Gedächtnis (cross-session): (leer)")]
+    {:role "system" :content content}))
 
 (defn- event->message [event]
   (let [event-type (:event/type event)
@@ -19,6 +33,7 @@
       :summary {:role "system"
                 :content (str "Zusammenfassung früherer Konversation: "
                              (get-in event [:event/data :text]))}
+      :long-term-memory nil
       :tool-result {:role "tool"
                     :tool_call_id (:tool-call-id data)
                     :content (pr-str (:result data))}
@@ -28,8 +43,57 @@
   (->> events
        (map event->message)
        (remove nil?)
-       (into [{:role "system" :content (config/build-system-prompt)}])
+       (into [{:role "system" :content system-prompt}
+              (long-term-memory->message)])
        vec))
+
+(defn- parse-dream-selection [selection max-items]
+  (let [trimmed (str/trim (or selection ""))]
+    (cond
+      (or (str/blank? trimmed)
+          (= "none" (str/lower-case trimmed)))
+      []
+
+      (= "all" (str/lower-case trimmed))
+      (vec (range 1 (inc max-items)))
+
+      :else
+      (->> (str/split trimmed #"[,\s]+")
+           (keep parse-long)
+           (filter #(<= 1 % max-items))
+           distinct
+           vec))))
+
+(defn- run-dream! []
+  (let [suggestions (dream/dream!)]
+    (if-not (seq suggestions)
+      (println "[dream] Keine Vorschläge.")
+      (do
+        (println "[dream] Vorschläge:")
+        (doseq [[idx suggestion] (map-indexed vector suggestions)]
+          (println (str "  " (inc idx) ". " suggestion)))
+        (println "Speichern? Nummern (z. B. 1,3), 'all' oder Enter für none:")
+        (print "dream> ")
+        (flush)
+        (let [selection (read-line)
+              chosen (parse-dream-selection selection (count suggestions))]
+          (if-not (seq chosen)
+            (println "[dream] Nichts gespeichert.")
+            (do
+              (doseq [idx chosen]
+                (dream/promote! (nth suggestions (dec idx)) :dream))
+              (println (str "[dream] " (count chosen) " Einträge gespeichert.")))))))))
+
+(defn- print-long-term-memory! []
+  (let [memory (dream/get-long-term-memory)]
+    (if-not (seq memory)
+      (println "[memory] Langzeit-Gedächtnis ist leer.")
+      (do
+        (println "[memory] Langzeit-Gedächtnis:")
+        (doseq [[idx {:keys [text source session timestamp]}] (map-indexed vector memory)]
+          (println (str "  " (inc idx) ". [" (name source) "] "
+                        text
+                        "  (session: " session ", ts: " timestamp ")")))))))
 
 (defn- process-user-message! [input]
   (events/append-event! :user-message {:text input})
@@ -121,6 +185,31 @@
                 (summarizer/summarize!)
                 (recur))
 
+              (= "dream" trimmed)
+              (do
+                (run-dream!)
+                (recur))
+
+              (= "memory" trimmed)
+              (do
+                (print-long-term-memory!)
+                (recur))
+
+              (= "promote" trimmed)
+              (do
+                (println "[memory] Bitte Text angeben: promote <text>")
+                (recur))
+
+              (str/starts-with? trimmed "promote ")
+              (do
+                (let [text (str/trim (subs trimmed 8))]
+                  (if (str/blank? text)
+                    (println "[memory] Bitte Text angeben: promote <text>")
+                    (do
+                      (dream/promote! text :manual)
+                      (println "[memory] Eintrag gespeichert."))))
+                (recur))
+
               (= "export" trimmed)
               (do
                 (export/export!)
@@ -141,18 +230,6 @@
                 (export/import! (subs trimmed 7))
                 (recur))
 
-              (str/starts-with? trimmed "history ")
-              (do
-                (let [event-type (keyword (subs trimmed 8))
-                      history    (events/entity-history event-type)]
-                  (if (empty? history)
-                    (println (str "No events of type :" (name event-type) " found."))
-                    (do
-                      (println (str "\n📜 History for :" (name event-type) " (" (count history) " entries)\n"))
-                      (doseq [{:keys [valid-time event]} history]
-                        (println (str "  " valid-time "  " (pr-str (:event/data event))))))))
-                (recur))
-
               (= "help" trimmed)
               (do
                 (println "Verfügbare Befehle:")
@@ -160,37 +237,14 @@
                 (println "  stats           - Token-Statistiken der Session")
                 (println "  stats all       - Token-Statistiken aller Sessions")
                 (println "  summarize       - Memory-Kompression ausführen")
+                (println "  dream           - Dream-Konsolidierung vorschlagen")
+                (println "  promote <text>  - Text manuell ins Langzeit-Gedächtnis übernehmen")
+                (println "  memory          - Langzeit-Gedächtnis anzeigen")
                 (println "  export          - Session exportieren (session-id.edn)")
                 (println "  export <datei>  - Session in Datei exportieren")
                 (println "  export all      - Alle Sessions exportieren (memory-backup.edn)")
                 (println "  import <datei>  - Events aus Datei importieren")
-                (println "  history <typ>   - Verlauf für Event-Typ anzeigen")
-                (println "  instructions    - Aktuelle Instructions anzeigen")
-                (println "  skills          - Geladene Skills auflisten")
                 (println "  exit            - Beenden")
-                (recur))
-
-              (= "instructions" trimmed)
-              (do
-                (let [instr (config/load-instructions)]
-                  (if instr
-                    (println instr)
-                    (println (str "[config] Keine Instructions gefunden.\n"
-                                  "  Global:     " config/global-instructions-path "\n"
-                                  "  Repository: " config/repo-instructions-path))))
-                (recur))
-
-              (= "skills" trimmed)
-              (do
-                (let [skills (config/load-skills)]
-                  (if (empty? skills)
-                    (println (str "[config] Keine Skills gefunden.\n"
-                                  "  Global:     " config/global-skills-dir "/<name>/SKILL.md\n"
-                                  "  Repository: " config/repo-skills-dir "/<name>/SKILL.md"))
-                    (do
-                      (println (str "\n📦 Geladene Skills (" (count skills) ")\n"))
-                      (doseq [[n _] (sort skills)]
-                        (println (str "  • " n))))))
                 (recur))
 
               :else

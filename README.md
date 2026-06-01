@@ -80,6 +80,7 @@ Unterstützte Event-Typen:
 - `:tool-call`
 - `:tool-result`
 - `:summary`
+- `:long-term-memory`
 - `:llm-usage`
 - `:error`
 
@@ -101,6 +102,9 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | `stats all`  | Verbrauchsstatistiken über alle Sessions |
 | `exit`       | Session beenden                     |
 | `summarize`  | Manuelle Kompression der Session    |
+| `dream`      | LLM-Vorschläge für Langzeit-Gedächtnis erzeugen und auswählen |
+| `promote <text>` | Text manuell ins Langzeit-Gedächtnis übernehmen |
+| `memory`     | Langzeit-Gedächtnis anzeigen        |
 | `export`     | Aktuelle Session exportieren (`session-id.edn`) |
 | `export <datei>` | Aktuelle Session in bestimmte Datei exportieren |
 | `export all` | Alle Sessions exportieren (`memory-backup.edn`) |
@@ -154,6 +158,38 @@ you> import mein-backup.edn
 
 Ab 50 relevanten Events wird die Konversation automatisch komprimiert.
 Die Originaldaten bleiben erhalten (Soft-Kompression).
+
+## Dream Consolidation
+
+Zusätzlich zur Summary-Kompression gibt es ein kuratiertes Langzeit-Gedächtnis.
+Dabei analysiert `dream` den Session-Verlauf per LLM und schlägt nummerierte, langlebige Fakten vor.
+Erst nach deiner Auswahl werden Vorschläge als `:long-term-memory` gespeichert.
+
+### Befehle
+
+- `dream` — erstellt Vorschläge und fragt interaktiv, welche Einträge gespeichert werden sollen
+- `promote <text>` — übernimmt einen Text manuell ins Langzeit-Gedächtnis (`:source :manual`)
+- `memory` — zeigt alle gespeicherten Langzeit-Einträge (cross-session)
+
+### Beispielablauf
+
+```text
+you> dream
+[dream] Vorschläge:
+  1. Für dieses Repo werden Tests mit `bb test` ausgeführt.
+  2. Cross-Session Suche ist über memory_search mit cross-session=true möglich.
+Speichern? Nummern (z. B. 1,3), 'all' oder Enter für none:
+dream> 1
+[dream] 1 Einträge gespeichert.
+
+you> promote Nutze zuerst `help` bei unbekannten Befehlen
+[memory] Eintrag gespeichert.
+
+you> memory
+[memory] Langzeit-Gedächtnis:
+  1. [dream] Für dieses Repo werden Tests mit `bb test` ausgeführt.
+  2. [manual] Nutze zuerst `help` bei unbekannten Befehlen
+```
 
 ### Cross-Session Gedächtnis
 
@@ -226,6 +262,7 @@ llm.clj
 - `src/config.clj` — Instructions & Skills laden (GitHub Copilot CLI Konvention)
 - `src/events.clj` — SQLite Event Store
 - `src/llm.clj` — GitHub Models API Client
+- `src/dream.clj` — Dream Consolidation + Long-Term-Memory Funktionen
 - `src/tools.clj` — Tool-Definitionen + Dispatcher
 - `src/copilot_cli.clj` — GitHub Copilot CLI Integration
 - `.env.example` — Beispielvariablen
