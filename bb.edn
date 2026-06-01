@@ -9,117 +9,13 @@
   memory {:doc "Langzeit-Gedächtnis anzeigen"
          :task (exec 'core/-main-memory)}
   install-plugin {:doc "Copilot CLI Plugin installieren (via 'copilot plugin install')"
-                 :requires ([babashka.fs :as fs]
-                            [babashka.process :refer [shell]]
-                            [clojure.string :as str])
-                 :task (let [repo-dir    (str (fs/canonicalize "."))
-                             script-path (str/replace
-                                          (str repo-dir "/plugin/memory_plugin.clj")
-                                          "\\" "/")
-                             plugin-dir  (str repo-dir "/plugin")
-                             plugin-json (str plugin-dir "/plugin.json")
-                             content     (format (str "{\n"
-                                                      "  \"name\": \"agentic-memory\",\n"
-                                                      "  \"version\": \"1.0.0\",\n"
-                                                      "  \"description\": \"Persistent cross-session memory for GitHub Copilot CLI\",\n"
-                                                      "  \"mcpServers\": {\n"
-                                                      "    \"agentic-memory\": {\n"
-                                                      "      \"type\": \"stdio\",\n"
-                                                      "      \"command\": \"b\",\n"
-                                                      "      \"args\": [\"%s\"],\n"
-                                                      "      \"tools\": [\"memory_search\", \"memory_add\", \"memory_list\", \"memory_session_end\"]\n"
-                                                      "    }\n"
-                                                      "  }\n"
-                                                      "}")
-                                                 script-path)]
-                         (spit plugin-json content)
-                         (println "📝 plugin.json geschrieben:" plugin-json)
-                         (shell "copilot" "plugin" "install" plugin-dir)
-                         (println "✅ Plugin installiert via: copilot plugin install" plugin-dir)
-                         (when-not (System/getenv "MEMORY_DB")
-                           (println "")
-                           (println "⚠️  MEMORY_DB nicht gesetzt. Empfehlung:")
-                           (println "   export MEMORY_DB=\"$HOME/.agentic-memory/memory.db\"")))}
+                 :task (exec 'tasks.plugin/-main)}
   repl {:doc "Start a Babashka REPL"
         :task (exec 'clojure.main/main ["-r"])}
   db   {:doc "DB-Inhalt anzeigen: b db [N] [session=id]"
-        :requires ([babashka.pods :as pods]
-                   [babashka.fs :as fs]
-                   [clojure.string :as str])
-        :task (let [args      *command-line-args*
-                    n-arg     (first (filter (fn [s] (re-matches (re-pattern "\\d+") s)) args))
-                    sess-arg  (first (filter (fn [s] (str/starts-with? s "session=")) args))
-                    n         (if n-arg (Integer/parseInt n-arg) 20)
-                    session   (when sess-arg (subs sess-arg 8))
-                    db-path   (or (System/getenv "MEMORY_DB")
-                                  (str (System/getProperty "user.home") "/.agentic-memory/memory.db"))
-                    home      (System/getProperty "user.home")
-                    exe-sfx   (if (str/includes? (System/getProperty "os.name") "Windows") ".exe" "")
-                    local-pod (str home "/.babashka/pods/repository/org.babashka/go-sqlite3/0.3.13/pod-babashka-go-sqlite3" exe-sfx)]
-                (try (pods/load-pod 'pod.babashka.go-sqlite3 {:version "0.3.13"})
-                     (catch Exception _ (pods/load-pod [local-pod])))
-                (require '[pod.babashka.go-sqlite3 :as sqlite])
-                (if-not (fs/exists? db-path)
-                  (println (str "DB nicht gefunden: " db-path))
-                  (let [sql  (if session
-                               ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                                 FROM events WHERE session = ?
-                                 ORDER BY COALESCE(valid_time, timestamp) DESC LIMIT ?" session n]
-                               ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                                 FROM events
-                                 ORDER BY COALESCE(valid_time, timestamp) DESC LIMIT ?" n])
-                        rows ((resolve 'pod.babashka.go-sqlite3/query) db-path sql)]
-                    (println (format "%-36s %-16s %-20s %-30s %s" "ID" "SESSION" "TYPE" "TIMESTAMP" "DATA"))
-                    (println (apply str (repeat 120 "-")))
-                    (doseq [row rows]
-                      (println (format "%-36s %-16s %-20s %-30s %s"
-                                       (str (:id row))
-                                       (subs (str (:session row) "                ") 0 16)
-                                       (str (:type row))
-                                       (str (:ts row))
-                                       (let [d (str (:data row))]
-                                         (if (> (count d) 60) (str (subs d 0 57) "...") d)))))
-                    (println (str "\n" (count rows) " Events (DB: " db-path ")")))))}
+        :task (exec 'tasks.db/-main)}
   db-watch {:doc "DB live beobachten (wie tail -f): b db-watch [session=id]"
-            :requires ([babashka.pods :as pods]
-                       [babashka.fs :as fs]
-                       [clojure.string :as str])
-            :task (let [args      *command-line-args*
-                        sess-arg  (first (filter (fn [s] (str/starts-with? s "session=")) args))
-                        session   (when sess-arg (subs sess-arg 8))
-                        db-path   (or (System/getenv "MEMORY_DB")
-                                      (str (System/getProperty "user.home") "/.agentic-memory/memory.db"))
-                        home      (System/getProperty "user.home")
-                        exe-sfx   (if (str/includes? (System/getProperty "os.name") "Windows") ".exe" "")
-                        local-pod (str home "/.babashka/pods/repository/org.babashka/go-sqlite3/0.3.13/pod-babashka-go-sqlite3" exe-sfx)]
-                    (try (pods/load-pod 'pod.babashka.go-sqlite3 {:version "0.3.13"})
-                         (catch Exception _ (pods/load-pod [local-pod])))
-                    (require '[pod.babashka.go-sqlite3 :as sqlite])
-                    (if-not (fs/exists? db-path)
-                      (println (str "DB nicht gefunden: " db-path))
-                      (do
-                        (println (str "Beobachte DB: " db-path (when session (str " [session=" session "]"))))
-                        (println "Ctrl+C zum Beenden.\n")
-                        (loop [last-ts ""]
-                          (let [sql  (if session
-                                       ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                                         FROM events WHERE session = ?
-                                         AND COALESCE(valid_time, timestamp) > ?
-                                         ORDER BY COALESCE(valid_time, timestamp) ASC" session last-ts]
-                                       ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                                         FROM events WHERE COALESCE(valid_time, timestamp) > ?
-                                         ORDER BY COALESCE(valid_time, timestamp) ASC" last-ts])
-                                rows ((resolve 'pod.babashka.go-sqlite3/query) db-path sql)
-                                new-ts (if (seq rows) (:ts (last rows)) last-ts)]
-                            (doseq [row rows]
-                              (println (format "[%s] %-20s %-16s %s"
-                                               (str (:ts row))
-                                               (str (:type row))
-                                               (subs (str (:session row) "                ") 0 16)
-                                               (let [d (str (:data row))]
-                                                 (if (> (count d) 70) (str (subs d 0 67) "...") d)))))
-                            (Thread/sleep 2000)
-                            (recur new-ts))))))}
+            :task (exec 'tasks.db/-main-watch)}
   test {:doc "Run all tests"
         :requires ([babashka.fs :as fs]
                    [clojure.string :as str]
