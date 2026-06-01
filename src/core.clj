@@ -141,6 +141,18 @@
                 (export/import! (subs trimmed 7))
                 (recur))
 
+              (str/starts-with? trimmed "history ")
+              (do
+                (let [event-type (keyword (subs trimmed 8))
+                      history    (events/entity-history event-type)]
+                  (if (empty? history)
+                    (println (str "No events of type :" (name event-type) " found."))
+                    (do
+                      (println (str "\n📜 History for :" (name event-type) " (" (count history) " entries)\n"))
+                      (doseq [{:keys [valid-time event]} history]
+                        (println (str "  " valid-time "  " (pr-str (:event/data event))))))))
+                (recur))
+
               (= "help" trimmed)
               (do
                 (println "Verfügbare Befehle:")
@@ -152,6 +164,7 @@
                 (println "  export <datei>  - Session in Datei exportieren")
                 (println "  export all      - Alle Sessions exportieren (memory-backup.edn)")
                 (println "  import <datei>  - Events aus Datei importieren")
+                (println "  history <typ>   - Verlauf für Event-Typ anzeigen")
                 (println "  instructions    - Aktuelle Instructions anzeigen")
                 (println "  skills          - Geladene Skills auflisten")
                 (println "  exit            - Beenden")
