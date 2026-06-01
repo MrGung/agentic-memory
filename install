@@ -215,3 +215,16 @@ then
 fi
 
 echo "Successfully installed bb in $install_dir"
+
+if [[ -t 0 ]]; then
+    echo ""
+    echo "GitHub Copilot CLI Hooks einrichten? [j/N]"
+    read -r answer
+    if [ "$answer" = "j" ] || [ "$answer" = "J" ]; then
+        mkdir -p ~/.copilot/hooks
+        sed "s|AGENTIC_MEMORY_PATH|$(pwd)|g" docs/global-hooks-example.json > ~/.copilot/hooks/memory.json
+        echo "✅ Hooks installiert: ~/.copilot/hooks/memory.json"
+        echo "   Setze MEMORY_DB in deiner Shell-Config:"
+        echo "   export MEMORY_DB=\"\$HOME/.agentic-memory/memory.db\""
+    fi
+fi

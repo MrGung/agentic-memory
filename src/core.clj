@@ -83,6 +83,22 @@
         (println (format "  %-16s %4d req   %d tokens" session requests tokens))))
     (println "────────────────────────────────────────")))
 
+(defn -main-dream [& _]
+  (events/init-db!)
+  (summarizer/summarize!))
+
+(defn -main-memory [& _]
+  (events/init-db!)
+  (let [rows (events/get-recent-events-by-type :long-term-memory 20 true)]
+    (if (seq rows)
+      (do
+        (println "## Langzeit-Gedächtnis")
+        (println)
+        (doseq [row rows]
+          (println (str "- " (or (get-in row [:event/data :text])
+                                 (pr-str (:event/data row)))))))
+      (println "Keine Langzeit-Gedächtnis-Einträge gefunden."))))
+
 (defn -main [& [session-name]]
   (let [session-id (or session-name (str (java.util.UUID/randomUUID)))]
     (binding [events/*session-id* session-id]

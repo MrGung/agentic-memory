@@ -46,6 +46,24 @@
       (is (= 1 (count user-events)))
       (is (every? #(= :user-message (:event/type %)) user-events)))))
 
+(deftest test-get-recent-events-by-type
+  (testing "Neueste Events nach Typ werden absteigend geliefert"
+    (events/init-db!)
+    (events/append-event! :long-term-memory {:text "älter"} (Instant/parse "2026-05-30T10:00:00Z"))
+    (events/append-event! :long-term-memory {:text "neuer"} (Instant/parse "2026-05-30T11:00:00Z"))
+    (let [rows (events/get-recent-events-by-type :long-term-memory 1 true)]
+      (is (= 1 (count rows)))
+      (is (= "neuer" (get-in (first rows) [:event/data :text])))))
+  (testing "Session-Filter kann aktiviert werden"
+    (events/init-db!)
+    (binding [events/*session-id* "session-a"]
+      (events/append-event! :long-term-memory {:text "aus-a"}))
+    (binding [events/*session-id* "session-b"]
+      (events/append-event! :long-term-memory {:text "aus-b"}))
+    (binding [events/*session-id* "session-b"]
+      (let [rows (events/get-recent-events-by-type :long-term-memory 10 false)]
+        (is (= ["aus-b"] (mapv #(get-in % [:event/data :text]) rows)))))))
+
 (deftest test-get-events-by-query
   (testing "Query-basierte Suche liefert korrekte Ergebnisse"
     (events/init-db!)

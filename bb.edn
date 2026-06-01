@@ -6,6 +6,10 @@
  {:override-builtin true
   run  {:doc "Start the agentic memory loop"
         :task (exec 'core/-main)}
+  dream {:doc "Dream-Konsolidierung starten"
+        :task (exec 'core/-main-dream)}
+  memory {:doc "Langzeit-Gedächtnis anzeigen"
+         :task (exec 'core/-main-memory)}
   repl {:doc "Start a Babashka REPL"
         :task (exec 'clojure.main/main ["-r"])}
   test {:doc "Run all tests"
