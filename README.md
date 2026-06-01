@@ -156,6 +156,28 @@ Unterstützte Event-Typen:
 - `:llm-usage`
 - `:error`
 
+## Memory TTL & Purge
+
+| Event-Typ | Standard-TTL |
+|---|---|
+| `user-message` | 30 Tage |
+| `assistant-message` | 30 Tage |
+| `tool-result` | 14 Tage |
+| `tool-call` | 14 Tage |
+| `session-end` | 7 Tage |
+| `summary` | 90 Tage |
+| `long-term-memory` | ∞ (nie) |
+
+### Befehle
+- `ttl` — TTL-Konfiguration und abgelaufene Events anzeigen
+- `purge` — Abgelaufene Events löschen (mit Bestätigung)
+
+### Konfiguration
+```bash
+MEMORY_TTL_USER_MESSAGE=30
+AUTO_PURGE=true
+```
+
 ## Sessions
 
 Jeder Start von `bb run` erstellt automatisch eine neue Session:
@@ -177,6 +199,8 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | `dream`      | LLM-Vorschläge für Langzeit-Gedächtnis erzeugen und auswählen |
 | `promote <text>` | Text manuell ins Langzeit-Gedächtnis übernehmen |
 | `memory`     | Langzeit-Gedächtnis anzeigen        |
+| `ttl`        | TTL-Konfiguration und abgelaufene Events anzeigen |
+| `purge`      | Abgelaufene Events löschen (mit Bestätigung) |
 | `export`     | Aktuelle Session exportieren (`session-id.edn`) |
 | `export <datei>` | Aktuelle Session in bestimmte Datei exportieren |
 | `export all` | Alle Sessions exportieren (`memory-backup.edn`) |
