@@ -223,6 +223,7 @@ llm.clj
 
 - `bb.edn` — Dependencies + Tasks (`run`, `repl`, `test`)
 - `src/core.clj` — Haupt-Loop (CLI)
+- `src/config.clj` — Instructions & Skills laden (GitHub Copilot CLI Konvention)
 - `src/events.clj` — SQLite Event Store
 - `src/llm.clj` — GitHub Models API Client
 - `src/tools.clj` — Tool-Definitionen + Dispatcher
@@ -261,3 +262,41 @@ Das Tool `shell_execute` ist mit zwei Sicherheitsstufen abgesichert:
 | `memory_search` | Durchsucht vergangene Events im Speicher                       |
 | `file_read`    | Liest den Inhalt einer Datei (nur im Working Directory)         |
 | `file_write`   | Schreibt Inhalt in eine Datei (mit Bestätigungsprompt)          |
+| `skill_*`      | Dynamisch registrierte Skill-Tools (aus SKILL.md mit `run:`)    |
+
+## Instructions & Skills
+
+Folgt der GitHub Copilot CLI Konvention.
+
+### Instructions
+
+| Pfad | Scope |
+|------|-------|
+| `~/.copilot/copilot-instructions.md` | Global |
+| `.github/copilot-instructions.md` | Repository |
+
+Beide Ebenen werden kombiniert. Repository-Instructions werden zuletzt hinzugefügt.
+
+### Skills
+
+| Pfad | Scope |
+|------|-------|
+| `~/.copilot/skills/<name>/SKILL.md` | Global |
+| `.github/skills/<name>/SKILL.md` | Repository |
+
+SKILL.md Beispiel:
+
+```
+Run the test suite
+
+run: bb test
+```
+
+Skills mit einer `run:` Zeile werden automatisch als Tools für den Agenten registriert. Repository-Skills überschreiben globale Skills bei gleichem Namen.
+
+### Befehle
+
+| Befehl         | Beschreibung                    |
+|----------------|---------------------------------|
+| `instructions` | Aktuelle Instructions anzeigen  |
+| `skills`       | Geladene Skills auflisten       |

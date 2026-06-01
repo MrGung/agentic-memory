@@ -2,6 +2,7 @@
   (:require [babashka.process :refer [sh]]
             [cheshire.core :as json]
             [clojure.string :as str]
+            [config :as config]
             [copilot-cli :as copilot]
             [events :as events]))
 
@@ -43,8 +44,33 @@
                                         :description "The content to write"}}
                  :required ["path" "content"]}}])
 
+(defn- skill->tool [skill-name skill-content]
+  (let [run-line    (->> (str/split-lines skill-content)
+                         (filter #(str/starts-with? (str/trim %) "run:"))
+                         first)
+        command     (when run-line
+                      (str/trim (subs run-line (+ (.indexOf ^String run-line "run:") 4))))
+        description (->> (str/split-lines skill-content)
+                         (remove str/blank?)
+                         first)]
+    (when command
+      {:name    (str "skill_" (str/replace skill-name #"[^a-zA-Z0-9_]" "_"))
+       :desc    (or description skill-name)
+       :command command})))
+
+(defn- load-skill-tools []
+  (->> (config/load-skills)
+       (keep (fn [[n c]] (skill->tool n c)))
+       vec))
+
 (def openai-tools
-  (mapv (fn [tool] {:type "function" :function tool}) tool-definitions))
+  (into (mapv (fn [tool] {:type "function" :function tool}) tool-definitions)
+        (mapv (fn [{:keys [name desc]}]
+                {:type "function"
+                 :function {:name        name
+                            :description desc
+                            :parameters  {:type "object" :properties {} :required []}}})
+              (load-skill-tools))))
 
 (def ^:private default-allowed-commands
   #{"ls" "find" "cat" "grep" "echo" "curl" "git" "gh" "bb" "pwd" "env" "which" "date"})
@@ -136,13 +162,22 @@
     {:matches (events/get-events-by-query (or query "") normalized-event-type (boolean cross-session))}))
 
 (defn- execute-tool [{:keys [name arguments]}]
-  (case name
-    "shell_suggest" (copilot/suggest-shell-command (or (:task arguments) ""))
-    "shell_execute" (shell-execute (or (:command arguments) ""))
-    "memory_search" (memory-search arguments)
-    "file_read"  (file-read  (or (:path arguments) ""))
-    "file_write" (file-write (or (:path arguments) "") (or (:content arguments) ""))
-    {:error (str "Unknown tool: " name)}))
+  (cond
+    (str/starts-with? name "skill_")
+    (let [skills    (load-skill-tools)
+          skill-cmd (->> skills (filter #(= (:name %) name)) first :command)]
+      (if skill-cmd
+        (shell-execute skill-cmd)
+        {:error (str "Unknown skill tool: " name)}))
+
+    :else
+    (case name
+      "shell_suggest" (copilot/suggest-shell-command (or (:task arguments) ""))
+      "shell_execute" (shell-execute (or (:command arguments) ""))
+      "memory_search" (memory-search arguments)
+      "file_read"  (file-read  (or (:path arguments) ""))
+      "file_write" (file-write (or (:path arguments) "") (or (:content arguments) ""))
+      {:error (str "Unknown tool: " name)})))
 
 (defn dispatch-tool-call! [tool-call]
   (let [tool-id (:id tool-call)
