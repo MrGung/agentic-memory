@@ -65,11 +65,12 @@ bb test
 Jedes Event wird als EDN-Datenstruktur gespeichert:
 
 ```clojure
-{:event/id        #uuid "..."
- :event/session   "mein-projekt"
- :event/type      :user-message
- :event/timestamp "2026-05-26T..."
- :event/data      {...}}
+{:event/id               #uuid "..."
+ :event/session          "mein-projekt"
+ :event/type             :user-message
+ :event/transaction-time "2026-05-26T..."
+ :event/valid-time       "2026-05-26T..."
+ :event/data             {...}}
 ```
 
 Unterstützte Event-Typen:
@@ -108,7 +109,26 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | `export <datei>` | Aktuelle Session in bestimmte Datei exportieren |
 | `export all` | Alle Sessions exportieren (`memory-backup.edn`) |
 | `import <datei>` | Events aus EDN-Datei in aktuelle Session laden |
+| `history <event-type>` | Verlauf eines Event-Typs anzeigen |
 | `help`       | Alle Befehle anzeigen               |
+
+## Time Model
+
+Jedes Event trägt zwei Zeitstempel, angelehnt an XTDBs bitemporales Modell:
+
+| Field               | Meaning                                              |
+|---------------------|------------------------------------------------------|
+| `:transaction-time` | When the event was written to the DB                 |
+| `:valid-time`       | When the event was factually valid (defaults to transaction-time) |
+
+### Command: `history <event-type>`
+
+```text
+you> history user-message
+📜 History for :user-message (12 entries)
+  2026-05-30T10:00:00Z  {:text "Hello"}
+  2026-05-30T10:01:05Z  {:text "How are you?"}
+```
 
 ## Export & Import
 
@@ -208,7 +228,9 @@ Kontext max:      25 Messages
   - `session` (TEXT)
   - `type` (TEXT)
   - `data` (EDN als TEXT)
-  - `timestamp` (TEXT, ISO-8601)
+  - `transaction_time` (TEXT, ISO-8601)
+  - `valid_time` (TEXT, ISO-8601)
+  - `timestamp` (TEXT, Legacy/Fallback)
 
 Die DB wird automatisch bei Start initialisiert.
 
@@ -237,6 +259,7 @@ llm.clj
 
 - `bb.edn` — Dependencies + Tasks (`run`, `repl`, `test`)
 - `src/core.clj` — Haupt-Loop (CLI)
+- `src/config.clj` — Instructions & Skills laden (GitHub Copilot CLI Konvention)
 - `src/events.clj` — SQLite Event Store
 - `src/llm.clj` — GitHub Models API Client
 - `src/dream.clj` — Dream Consolidation + Long-Term-Memory Funktionen
@@ -276,3 +299,41 @@ Das Tool `shell_execute` ist mit zwei Sicherheitsstufen abgesichert:
 | `memory_search` | Durchsucht vergangene Events im Speicher                       |
 | `file_read`    | Liest den Inhalt einer Datei (nur im Working Directory)         |
 | `file_write`   | Schreibt Inhalt in eine Datei (mit Bestätigungsprompt)          |
+| `skill_*`      | Dynamisch registrierte Skill-Tools (aus SKILL.md mit `run:`)    |
+
+## Instructions & Skills
+
+Folgt der GitHub Copilot CLI Konvention.
+
+### Instructions
+
+| Pfad | Scope |
+|------|-------|
+| `~/.copilot/copilot-instructions.md` | Global |
+| `.github/copilot-instructions.md` | Repository |
+
+Beide Ebenen werden kombiniert. Repository-Instructions werden zuletzt hinzugefügt.
+
+### Skills
+
+| Pfad | Scope |
+|------|-------|
+| `~/.copilot/skills/<name>/SKILL.md` | Global |
+| `.github/skills/<name>/SKILL.md` | Repository |
+
+SKILL.md Beispiel:
+
+```
+Run the test suite
+
+run: bb test
+```
+
+Skills mit einer `run:` Zeile werden automatisch als Tools für den Agenten registriert. Repository-Skills überschreiben globale Skills bei gleichem Namen.
+
+### Befehle
+
+| Befehl         | Beschreibung                    |
+|----------------|---------------------------------|
+| `instructions` | Aktuelle Instructions anzeigen  |
+| `skills`       | Geladene Skills auflisten       |
