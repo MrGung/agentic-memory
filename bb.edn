@@ -1,6 +1,4 @@
-{:deps {babashka/sqlite3 {:mvn/version "0.1.0"}
-        cheshire/cheshire {:mvn/version "5.13.0"}
-        clj-http/clj-http {:mvn/version "3.13.0"}}
+{:deps {}
  :paths ["src" "test"]
  :tasks
  {:override-builtin true
@@ -11,7 +9,32 @@
   memory {:doc "Langzeit-Gedächtnis anzeigen"
          :task (exec 'core/-main-memory)}
   install-plugin {:doc "Copilot CLI Plugin installieren"
-                 :task (shell "bash scripts/install_plugin.sh")}
+                 :requires ([babashka.fs :as fs]
+                            [clojure.string :as str])
+                 :task (let [home       (System/getProperty "user.home")
+                             plugin-dir (str home "/.copilot/plugins/agentic-memory")
+                             repo-dir   (str (fs/canonicalize "."))
+                             script-path (str/replace
+                                          (str repo-dir "/plugin/memory_plugin.clj")
+                                          "\\" "/")
+                             manifest   (str plugin-dir "/manifest.json")
+                             content    (format (str "{\n"
+                                                    "  \"name\": \"agentic-memory\",\n"
+                                                    "  \"version\": \"1.0.0\",\n"
+                                                    "  \"description\": \"Persistent cross-session memory for GitHub Copilot CLI\",\n"
+                                                    "  \"runtime\": \"process\",\n"
+                                                    "  \"command\": \"bb\",\n"
+                                                    "  \"args\": [\"%s\"],\n"
+                                                    "  \"tools\": [\"memory_search\", \"memory_add\", \"memory_list\", \"memory_session_end\"]\n"
+                                                    "}")
+                                               script-path)]
+                         (fs/create-dirs plugin-dir)
+                         (spit manifest content)
+                         (println "✅ Plugin installiert:" manifest)
+                         (when-not (System/getenv "MEMORY_DB")
+                           (println "")
+                           (println "⚠️  MEMORY_DB nicht gesetzt. Empfehlung:")
+                           (println "   export MEMORY_DB=\"$HOME/.agentic-memory/memory.db\"")))}
   repl {:doc "Start a Babashka REPL"
         :task (exec 'clojure.main/main ["-r"])}
   test {:doc "Run all tests"
@@ -19,13 +42,13 @@
                    [clojure.string :as str]
                    [clojure.test :as t])
         :task (do
-                (doseq [file (sort (map str (fs/glob "test" "**/*_test.clj")))]
+                (doseq [file (sort (map str (fs/glob "." "test/*_test.clj")))]
                   (require
                    (symbol
                     (-> file
-                        (str/replace (re-pattern "^test/") "")
+                        (str/replace (re-pattern "[/\\\\]") ".")
+                        (str/replace (re-pattern "^test\\.") "")
                         (str/replace (re-pattern "\\.clj$") "")
-                        (str/replace (re-pattern "/") ".")
                         (str/replace (re-pattern "_") "-")))))
                 (let [{:keys [fail error]} (t/run-all-tests (re-pattern ".*-test$"))]
                   (when (pos? (+ fail error))

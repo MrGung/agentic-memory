@@ -8,7 +8,7 @@
            [java.nio.file.attribute FileAttribute]))
 
 (def ^:private bb-bin
-  (or (System/getenv "BB_BIN") "bb"))
+  (or (System/getenv "BB_BIN") "b"))
 
 (def ^:private plugin-path
   (str (fs/cwd) "/plugin/memory_plugin.clj"))

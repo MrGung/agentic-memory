@@ -1,12 +1,15 @@
 (ns events-test
   (:require [babashka.fs :as fs]
-            [babashka.sqlite3 :as sqlite]
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
-            [events :as events])
+            [events :as events]
+            [pod-loader :as pod-loader])
   (:import [java.nio.file Files]
            [java.nio.file.attribute FileAttribute]
            [java.time Instant]))
+
+(pod-loader/load-sqlite-pod!)
+(require '[pod.babashka.go-sqlite3 :as sqlite])
 
 (defn- with-test-db [f]
   (let [dir (str (Files/createTempDirectory "agentic-memory-events-test"
@@ -131,30 +134,30 @@
 
 (deftest test-migrate-db
   (testing "migrate-db! ergänzt fehlende Spalten und übernimmt timestamp-Werte"
-    (let [conn (sqlite/open events/*db-path*)]
-      (sqlite/execute! conn ["CREATE TABLE events (
-                               id TEXT PRIMARY KEY,
-                               session TEXT NOT NULL,
-                               type TEXT NOT NULL,
-                               data TEXT NOT NULL,
-                               timestamp TEXT NOT NULL
-                             )"])
-      (sqlite/execute! conn ["INSERT INTO events (id, session, type, data, timestamp) VALUES (?, ?, ?, ?, ?)"
-                            "00000000-0000-0000-0000-000000000001"
-                            "legacy-session"
-                            "user-message"
-                            "{:text \"legacy\"}"
-                            "2026-05-30T09:00:00Z"])
-      (sqlite/close conn))
-    (events/init-db!)
-    (let [conn (#'events/get-conn)
-         columns (set (map :name (sqlite/query conn ["PRAGMA table_info(events)"])))
-         row (first (sqlite/query conn ["SELECT transaction_time, valid_time FROM events WHERE id = ?"
-                                        "00000000-0000-0000-0000-000000000001"]))]
-      (is (contains? columns "transaction_time"))
-      (is (contains? columns "valid_time"))
-      (is (= "2026-05-30T09:00:00Z" (:transaction_time row)))
-      (is (= "2026-05-30T09:00:00Z" (:valid_time row))))))
+    (let [db-path events/*db-path*]
+      (sqlite/execute! db-path
+                       ["CREATE TABLE events (
+                           id TEXT PRIMARY KEY,
+                           session TEXT NOT NULL,
+                           type TEXT NOT NULL,
+                           data TEXT NOT NULL,
+                           timestamp TEXT NOT NULL
+                          )"])
+      (sqlite/execute! db-path
+                       ["INSERT INTO events (id, session, type, data, timestamp) VALUES (?, ?, ?, ?, ?)"
+                        "00000000-0000-0000-0000-000000000001"
+                        "legacy-session"
+                        "user-message"
+                        "{:text \"legacy\"}"
+                        "2026-05-30T09:00:00Z"])
+      (events/init-db!)
+      (let [columns (set (map :name (sqlite/query db-path ["PRAGMA table_info(events)"])))
+            row     (first (sqlite/query db-path ["SELECT transaction_time, valid_time FROM events WHERE id = ?"
+                                                  "00000000-0000-0000-0000-000000000001"]))]
+        (is (contains? columns "transaction_time"))
+        (is (contains? columns "valid_time"))
+        (is (= "2026-05-30T09:00:00Z" (:transaction_time row)))
+        (is (= "2026-05-30T09:00:00Z" (:valid_time row)))))))
 
 (deftest test-get-context-window
   (testing "Kontextfenster gibt maximal N Events zurück"

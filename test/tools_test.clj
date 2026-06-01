@@ -48,13 +48,14 @@
     (let [response (tools/dispatch-tool-call!
                     {:id "call-1"
                      :function {:name "memory_search"
-                                :arguments (json/generate-string {:query "hallo"})}})
+                                :arguments (json/generate-string {:query "hallo"
+                                                                  :event-type "user-message"})}})
           result (json/parse-string (:content response) true)
           event-types (mapv :event/type (events/get-events))]
       (is (= "tool" (:role response)))
       (is (= "call-1" (:tool_call_id response)))
       (is (= 1 (count (:matches result))))
-      (is (= :user-message (get-in result [:matches 0 :event/type])))
+      (is (= "user-message" (get-in result [:matches 0 :event/type])))
       (is (= [:user-message :tool-call :tool-result] event-types)))))
 
 (deftest test-dispatch-tool-call-with-event-type-filter
@@ -68,7 +69,7 @@
                                 :arguments (json/generate-string {:event-type "assistant-message"})}})
           result (json/parse-string (:content response) true)]
       (is (= 1 (count (:matches result))))
-      (is (= :assistant-message (get-in result [:matches 0 :event/type]))))))
+      (is (= "assistant-message" (get-in result [:matches 0 :event/type]))))))
 
 (deftest test-load-allowed-commands-from-env
   (testing "Allowlist wird aus SHELL_ALLOWED_COMMANDS geladen"

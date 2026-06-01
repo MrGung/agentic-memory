@@ -1,39 +1,25 @@
 (ns events
-  (:require [babashka.sqlite3 :as sqlite]
+  (:require [babashka.pods :as pods]
             [clojure.string :as str]
-            [clojure.edn :as edn])
+            [clojure.edn :as edn]
+            [pod-loader :as pod-loader])
   (:import [java.time Instant]
            [java.util UUID]))
+
+(pod-loader/load-sqlite-pod!)
+(require '[pod.babashka.go-sqlite3 :as sqlite])
 
 (def ^:dynamic *db-path* "memory.db")
 
 (def ^:dynamic *session-id*
   (str (java.util.UUID/randomUUID)))
 
-(def ^:private conn (atom nil))
-(def ^:private conn-db-path (atom nil))
-
-(defn close-db! []
-  (when-let [db @conn]
-    (sqlite/close db))
-  (reset! conn nil)
-  (reset! conn-db-path nil)
-  nil)
-
-(defn- get-conn []
-  (when (or (nil? @conn)
-            (not= @conn-db-path *db-path*))
-    (close-db!)
-    (reset! conn (sqlite/open *db-path*))
-    (reset! conn-db-path *db-path*))
-  @conn)
+(defn close-db! [] nil)
 
 (declare migrate-db!)
 
 (defn init-db! []
-  (sqlite/execute!
-   (get-conn)
-   ["CREATE TABLE IF NOT EXISTS events (
+  (sqlite/execute! *db-path* ["CREATE TABLE IF NOT EXISTS events (
      id               TEXT PRIMARY KEY,
      session          TEXT NOT NULL,
      type             TEXT NOT NULL,
@@ -42,24 +28,18 @@
      transaction_time TEXT,
      valid_time       TEXT
     )"])
-    (sqlite/execute!
-     (get-conn)
-     ["CREATE INDEX IF NOT EXISTS idx_session ON events (session)"])
-    (sqlite/execute!
-     (get-conn)
-     ["CREATE INDEX IF NOT EXISTS idx_type ON events (type)"])
-    (sqlite/execute!
-     (get-conn)
-     ["CREATE INDEX IF NOT EXISTS idx_valid_time ON events (valid_time)"])
-    (migrate-db!)
-    nil)
+  (sqlite/execute! *db-path* ["CREATE INDEX IF NOT EXISTS idx_session ON events (session)"])
+  (sqlite/execute! *db-path* ["CREATE INDEX IF NOT EXISTS idx_type ON events (type)"])
+  (migrate-db!)
+  (try (sqlite/execute! *db-path* ["CREATE INDEX IF NOT EXISTS idx_valid_time ON events (valid_time)"]) (catch Exception _ nil))
+  nil)
 
 (defn migrate-db! []
-    (try (sqlite/execute! (get-conn) ["ALTER TABLE events ADD COLUMN transaction_time TEXT"]) (catch Exception _ nil))
-    (try (sqlite/execute! (get-conn) ["ALTER TABLE events ADD COLUMN valid_time TEXT"]) (catch Exception _ nil))
-    (sqlite/execute! (get-conn) ["UPDATE events SET transaction_time = timestamp WHERE transaction_time IS NULL"])
-    (sqlite/execute! (get-conn) ["UPDATE events SET valid_time = timestamp WHERE valid_time IS NULL"])
-    nil)
+  (try (sqlite/execute! *db-path* ["ALTER TABLE events ADD COLUMN transaction_time TEXT"]) (catch Exception _ nil))
+  (try (sqlite/execute! *db-path* ["ALTER TABLE events ADD COLUMN valid_time TEXT"]) (catch Exception _ nil))
+  (sqlite/execute! *db-path* ["UPDATE events SET transaction_time = timestamp WHERE transaction_time IS NULL"])
+  (sqlite/execute! *db-path* ["UPDATE events SET valid_time = timestamp WHERE valid_time IS NULL"])
+  nil)
 
 (defn append-event!
     ([event-type data] (append-event! event-type data (Instant/now)))
@@ -76,7 +56,7 @@
                           :event/valid-time       valid-time-str
                           :event/data             data}]
     (sqlite/execute!
-     (get-conn)
+     *db-path*
      ["INSERT INTO events (id, session, type, data, timestamp, transaction_time, valid_time) VALUES (?, ?, ?, ?, ?, ?, ?)"
       (str id)
       *session-id*
@@ -133,14 +113,14 @@
 
 (defn get-events []
     (mapv row->event
-       (sqlite/query (get-conn)
+       (sqlite/query *db-path*
                      (build-query {:session *session-id*
                                    :order   :asc}))))
 
 (defn get-latest-summary []
     (first
      (mapv row->event
-        (sqlite/query (get-conn)
+        (sqlite/query *db-path*
                       (build-query {:session *session-id*
                                     :type    :summary
                                     :order   :desc
@@ -148,14 +128,14 @@
 
 (defn get-events-after [timestamp]
     (mapv row->event
-       (sqlite/query (get-conn)
+       (sqlite/query *db-path*
                      (build-query {:session *session-id*
                                    :after   timestamp
                                    :order   :asc}))))
 
 (defn get-events-by-type [event-type]
     (mapv row->event
-       (sqlite/query (get-conn)
+       (sqlite/query *db-path*
                      (build-query {:session *session-id*
                                    :type    event-type
                                    :order   :asc}))))
@@ -167,7 +147,7 @@
      (get-recent-events-by-type event-type limit true))
     ([event-type limit cross-session?]
      (mapv row->event
-        (sqlite/query (get-conn)
+        (sqlite/query *db-path*
                       (build-query (cond-> {:type  event-type
                                             :order :desc
                                             :limit limit}
@@ -178,7 +158,7 @@
      (get-events-by-query query event-type false))
     ([query event-type cross-session?]
      (mapv row->event
-        (sqlite/query (get-conn)
+        (sqlite/query *db-path*
                       (build-query (cond-> {:search query
                                             :type   event-type
                                             :order  :asc}
@@ -189,7 +169,7 @@
       (let [newer-events (get-events-after (or (:event/valid-time summary)
                                             (:event/timestamp summary)))]
      (into [summary] newer-events))
-      (->> (sqlite/query (get-conn)
+      (->> (sqlite/query *db-path*
                       (build-query {:session *session-id*
                                     :order   :desc
                                     :limit   n}))
@@ -205,13 +185,13 @@
          {:transaction-time (or (:transaction_time row) (:timestamp row))
           :valid-time       (or (:valid_time row) (:timestamp row))
           :event            (row->event row)})
-       (sqlite/query (get-conn)
+       (sqlite/query *db-path*
                      (build-query {:session *session-id*
                                    :type    event-type
                                    :order   :asc}))))
 
 (defn list-sessions []
-    (->> (sqlite/query (get-conn)
+    (->> (sqlite/query *db-path*
                     ["SELECT session,
                              MIN(COALESCE(valid_time, transaction_time, timestamp)) as started,
                              MAX(COALESCE(valid_time, transaction_time, timestamp)) as last_active,
@@ -223,11 +203,11 @@
 
 (defn delete-session! [session-id]
     (sqlite/execute!
-     (get-conn)
+     *db-path*
      ["DELETE FROM events WHERE session = ?" session-id]))
 
 (defn count-events-before [event-type timestamp]
-    (let [row (first (sqlite/query (get-conn)
+    (let [row (first (sqlite/query *db-path*
                                   ["SELECT COUNT(*) AS count
                                     FROM events
                                     WHERE type = ?
@@ -239,7 +219,7 @@
 (defn delete-events-before! [event-type timestamp]
     (let [deleted (count-events-before event-type timestamp)]
      (sqlite/execute!
-      (get-conn)
+      *db-path*
       ["DELETE FROM events
         WHERE type = ?
           AND COALESCE(valid_time, timestamp) <= ?"
@@ -251,20 +231,26 @@
     (let [trimmed (str/trim (or text ""))]
       (if (str/blank? trimmed)
         0
-        (do
-          (sqlite/execute!
-           (get-conn)
-           ["DELETE FROM events
-             WHERE type = 'long-term-memory'
-               AND LOWER(data) LIKE ? ESCAPE '\\'"
-            (like-pattern trimmed)])
-          (let [result (first (sqlite/query (get-conn) ["SELECT changes() AS count"]))]
-            (long (or (:count result) 0)))))))
+        (let [pattern (like-pattern trimmed)
+              count-row (first (sqlite/query *db-path*
+                                             ["SELECT COUNT(*) AS count FROM events
+                                               WHERE type = 'long-term-memory'
+                                                 AND LOWER(data) LIKE ? ESCAPE '\\'"
+                                              pattern]))
+              cnt (long (or (:count count-row) 0))]
+          (when (pos? cnt)
+            (sqlite/execute!
+             *db-path*
+             ["DELETE FROM events
+               WHERE type = 'long-term-memory'
+                 AND LOWER(data) LIKE ? ESCAPE '\\'"
+              pattern]))
+          cnt))))
 
 (defn get-usage-stats
     ([] (get-usage-stats false))
     ([cross-session?]
-     (let [rows (sqlite/query (get-conn)
+     (let [rows (sqlite/query *db-path*
                            (build-query (cond-> {:type  "llm-usage"
                                                  :order :asc}
                                           (not cross-session?) (assoc :session *session-id*))))

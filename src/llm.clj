@@ -1,6 +1,6 @@
 (ns llm
   (:require [cheshire.core :as json]
-            [clj-http.client :as http]
+            [babashka.http-client :as http]
             [events :as events]))
 
 (def ^:private api-url "https://models.inference.ai.azure.com/chat/completions")
@@ -13,13 +13,14 @@
 
 (defn- request! [body]
   (if-let [github-token (token)]
-    (http/post api-url
-               {:headers {"Authorization" (str "Bearer " github-token)
-                          "Content-Type" "application/json"}
-                :body (json/generate-string body)
-                :as :json
-                :coerce :always
-                :throw-exceptions true})
+    (let [response (http/post api-url
+                              {:headers {"Authorization" (str "Bearer " github-token)
+                                         "Content-Type" "application/json"}
+                               :body (json/generate-string body)
+                               :throw false})]
+      (when (>= (:status response) 400)
+        (throw (ex-info (str "HTTP " (:status response)) {:status (:status response) :body (:body response)})))
+      (update response :body #(json/parse-string % true)))
     (throw (ex-info "Missing GITHUB_TOKEN environment variable" {:type :missing-token}))))
 
 (defn- log-error! [message details]
