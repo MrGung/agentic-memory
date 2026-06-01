@@ -197,6 +197,7 @@ bb run mein-projekt # Benannte Session (wiederverwendbar)
 | `exit`       | Session beenden                     |
 | `summarize`  | Manuelle Kompression der Session    |
 | `dream`      | LLM-Vorschläge für Langzeit-Gedächtnis erzeugen und auswählen |
+| `conflicts`  | Widersprüche im Langzeit-Gedächtnis erkennen und auflösen |
 | `promote <text>` | Text manuell ins Langzeit-Gedächtnis übernehmen |
 | `memory`     | Langzeit-Gedächtnis anzeigen        |
 | `ttl`        | TTL-Konfiguration und abgelaufene Events anzeigen |
@@ -264,6 +265,7 @@ Erst nach deiner Auswahl werden Vorschläge als `:long-term-memory` gespeichert.
 ### Befehle
 
 - `dream` — erstellt Vorschläge und fragt interaktiv, welche Einträge gespeichert werden sollen
+- `conflicts` — erkennt widersprüchliche Einträge und führt durch die Auflösung
 - `promote <text>` — übernimmt einen Text manuell ins Langzeit-Gedächtnis (`:source :manual`)
 - `memory` — zeigt alle gespeicherten Langzeit-Einträge (cross-session)
 
@@ -285,6 +287,24 @@ you> memory
 [memory] Langzeit-Gedächtnis:
   1. [dream] Für dieses Repo werden Tests mit `bb test` ausgeführt.
   2. [manual] Nutze zuerst `help` bei unbekannten Befehlen
+```
+
+## Konflikt-Erkennung
+
+`conflicts` analysiert alle Long-Term-Memory-Einträge auf Widersprüche und führt interaktiv durch die Auflösung (`a`, `b`, `both`, `merge`, `skip`).
+
+```text
+you> conflicts
+⚠️  1 Widerspruch gefunden:
+
+--- Konflikt 1 ---
+A: Wir nutzen CircleCI für CI/CD
+B: Wir nutzen GitHub Actions für CI/CD
+⚡ Widersprüchliche CI/CD-Tools
+
+[a] A behalten  [b] B behalten  [both] beide  [merge] zusammenführen  [skip]
+Auswahl> merge
+✅ Zusammengeführt: Wir haben von CircleCI auf GitHub Actions migriert.
 ```
 
 ### Cross-Session Gedächtnis

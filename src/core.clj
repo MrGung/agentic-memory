@@ -83,7 +83,64 @@
             (do
               (doseq [idx chosen]
                 (dream/promote! (nth suggestions (dec idx)) :dream))
-              (println (str "[dream] " (count chosen) " Einträge gespeichert.")))))))))
+              (println (str "[dream] " (count chosen) " Einträge gespeichert.")))))))
+    (let [conflicts (dream/detect-conflicts!)]
+      (if (seq conflicts)
+        (println (str "[dream] ⚠️  " (count conflicts)
+                      " Widersprüche erkannt. Nutze `conflicts` zum Auflösen."))
+        (println "[dream] Keine Widersprüche erkannt.")))))
+
+(defn- prompt-conflict-choice []
+  (println "[a] A behalten  [b] B behalten  [both] beide  [merge] zusammenführen  [skip]")
+  (print "Auswahl> ")
+  (flush)
+  (str/lower-case (str/trim (or (read-line) ""))))
+
+(defn- run-conflicts! []
+  (let [conflicts (dream/detect-conflicts!)
+        total (count conflicts)]
+    (if (zero? total)
+      (println "✅ Keine Widersprüche gefunden.")
+      (do
+        (println (str "⚠️  " total " Widerspruch" (when (not= total 1) "e") " gefunden:"))
+        (println)
+        (doseq [[idx conflict] (map-indexed vector conflicts)]
+          (let [{:keys [entry-a entry-b reason]} conflict
+                text-a (:text entry-a)
+                text-b (:text entry-b)]
+            (println (str "--- Konflikt " (inc idx) " ---"))
+            (println (str "A: " text-a))
+            (println (str "B: " text-b))
+            (println (str "⚡ " reason))
+            (loop []
+              (let [choice (prompt-conflict-choice)]
+                (cond
+                  (= "a" choice)
+                  (do
+                    (events/delete-long-term-memory-by-text! text-b)
+                    (println "✅ A behalten, B gelöscht."))
+
+                  (= "b" choice)
+                  (do
+                    (events/delete-long-term-memory-by-text! text-a)
+                    (println "✅ B behalten, A gelöscht."))
+
+                  (= "both" choice)
+                  (println "ℹ️  Beide Einträge behalten.")
+
+                  (= "merge" choice)
+                  (if-let [merged (dream/resolve-conflict-merge! conflict)]
+                    (println (str "✅ Zusammengeführt: " merged))
+                    (println "❌ Zusammenführen fehlgeschlagen."))
+
+                  (= "skip" choice)
+                  (println "↩️  Übersprungen.")
+
+                  :else
+                  (do
+                    (println "Ungültige Auswahl. Bitte a/b/both/merge/skip eingeben.")
+                    (recur)))))
+            (println)))))))
 
 (defn- print-long-term-memory! []
   (let [memory (dream/get-long-term-memory)]
@@ -230,6 +287,11 @@
                 (run-dream!)
                 (recur))
 
+              (= "conflicts" trimmed)
+              (do
+                (run-conflicts!)
+                (recur))
+
               (= "memory" trimmed)
               (do
                 (print-long-term-memory!)
@@ -300,6 +362,7 @@
                 (println "  stats all       - Token-Statistiken aller Sessions")
                 (println "  summarize       - Memory-Kompression ausführen")
                 (println "  dream           - Dream-Konsolidierung vorschlagen")
+                (println "  conflicts       - Widersprüche im Langzeit-Gedächtnis erkennen und auflösen")
                 (println "  promote <text>  - Text manuell ins Langzeit-Gedächtnis übernehmen")
                 (println "  memory          - Langzeit-Gedächtnis anzeigen")
                 (println "  ttl             - TTL-Konfiguration und abgelaufene Events anzeigen")

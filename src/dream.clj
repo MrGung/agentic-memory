@@ -1,5 +1,6 @@
 (ns dream
-  (:require [clojure.string :as str]
+  (:require [cheshire.core :as json]
+            [clojure.string :as str]
             [events :as events]
             [llm :as llm]))
 
@@ -62,3 +63,77 @@
 (defn promote! [text source]
   (events/append-event! :long-term-memory {:text text
                                            :source source}))
+
+(defn- parse-json-array [text]
+  (let [content (str/trim (or text ""))]
+    (try
+      (cond
+        (str/blank? content) []
+        :else
+        (let [direct (json/parse-string content true)]
+          (if (vector? direct)
+            direct
+            [])))
+      (catch Exception _
+        (try
+          (if-let [arr (re-find #"(?s)\[.*\]" content)]
+            (let [parsed (json/parse-string arr true)]
+              (if (vector? parsed) parsed []))
+            [])
+          (catch Exception _
+            []))))))
+
+(defn detect-conflicts! []
+  (let [entries (get-long-term-memory)]
+    (if (< (count entries) 2)
+      []
+      (let [numbered (->> entries
+                          (map-indexed (fn [idx {:keys [text]}]
+                                         (str (inc idx) ". " text)))
+                          (str/join "\n"))
+            result (llm/chat [{:role "system"
+                               :content (str "Analysiere Langzeit-Gedächtnis-Einträge auf Widersprüche. "
+                                             "Antworte ausschließlich als JSON-Array im Format "
+                                             "[{\"a\": <nr>, \"b\": <nr>, \"reason\": \"...\"}]. "
+                                             "Wenn es keine Widersprüche gibt: []")}
+                              {:role "user"
+                               :content (str "Einträge:\n" numbered)}])]
+        (if-not (:ok result)
+          []
+          (->> (parse-json-array (:content result))
+               (keep (fn [{:keys [a b reason]}]
+                       (let [idx-a (when (number? a) (dec (long a)))
+                             idx-b (when (number? b) (dec (long b)))
+                             entry-a (when (and (some? idx-a) (>= idx-a 0) (< idx-a (count entries)))
+                                       (nth entries idx-a))
+                             entry-b (when (and (some? idx-b) (>= idx-b 0) (< idx-b (count entries)))
+                                       (nth entries idx-b))
+                             reason-text (str/trim (or reason ""))]
+                         (when (and entry-a entry-b (not= idx-a idx-b))
+                           {:entry-a {:index (inc idx-a)
+                                      :text (:text entry-a)}
+                            :entry-b {:index (inc idx-b)
+                                      :text (:text entry-b)}
+                            :reason (if (str/blank? reason-text)
+                                      "Widersprüchliche Aussage"
+                                      reason-text)}))))
+               vec))))))
+
+(defn resolve-conflict-merge! [{:keys [entry-a entry-b]}]
+  (let [text-a (str/trim (or (:text entry-a) ""))
+        text-b (str/trim (or (:text entry-b) ""))]
+    (when (and (not (str/blank? text-a))
+               (not (str/blank? text-b)))
+      (let [result (llm/chat [{:role "system"
+                               :content (str "Führe zwei widersprüchliche Langzeit-Gedächtnis-Einträge "
+                                             "zu einem präzisen, korrekten einzelnen Eintrag zusammen. "
+                                             "Antworte nur mit dem finalen Satz.")}
+                              {:role "user"
+                               :content (str "Eintrag A: " text-a "\n"
+                                             "Eintrag B: " text-b)}])
+            merged-text (str/trim (or (:content result) ""))]
+        (when (and (:ok result) (not (str/blank? merged-text)))
+          (events/delete-long-term-memory-by-text! text-a)
+          (events/delete-long-term-memory-by-text! text-b)
+          (promote! merged-text :dream-merge)
+          merged-text)))))
