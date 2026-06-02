@@ -136,6 +136,16 @@
                                    :after   timestamp
                                    :order   :asc}))))
 
+(defn get-events-after-type
+    "Returns all events of the given type after timestamp, scoped to *session-id*."
+    [timestamp event-type]
+    (mapv row->event
+       (sqlite/query *db-path*
+                     (build-query {:session *session-id*
+                                   :type    event-type
+                                   :after   timestamp
+                                   :order   :asc}))))
+
 (defn get-events-by-type [event-type]
     (mapv row->event
        (sqlite/query *db-path*

@@ -125,3 +125,60 @@
       (is (= 1 (get-in list-res [:result :count])))
       (is (= "Immer HoneySQL für SQL verwenden"
              (get-in list-res [:result :entries 0 :data :text]))))))
+
+(defn- write-config! [path level]
+  (spit path (pr-str {:enforcement-level level})))
+
+(deftest test-enforcement-passive
+  (testing "Stufe :passive — memory_session_end liefert :done true ohne Warning"
+    (let [db-path  (str *tmp-dir* "/test-enforce-passive.db")
+          cfg-path (str *tmp-dir* "/config-passive.edn")]
+      (write-config! cfg-path :passive)
+      (let [result (call-plugin {:jsonrpc "2.0" :id 1 :method "tools/call"
+                                  :params {:name "memory_session_end" :arguments {}}}
+                                 {"MEMORY_DB"      db-path
+                                  "MEMORY_CONFIG"  cfg-path})]
+        (is (= true (get-in result [:result :done])))
+        (is (nil? (get-in result [:result :warning])))
+        (is (nil? (get-in result [:result :blocked])))))))
+
+(deftest test-enforcement-advisory-no-memories
+  (testing "Stufe :advisory — ohne Erinnerungen: :done true mit :warning"
+    (let [db-path  (str *tmp-dir* "/test-enforce-advisory.db")
+          cfg-path (str *tmp-dir* "/config-advisory.edn")]
+      (write-config! cfg-path :advisory)
+      (let [result (call-plugin {:jsonrpc "2.0" :id 1 :method "tools/call"
+                                  :params {:name "memory_session_end" :arguments {}}}
+                                 {"MEMORY_DB"      db-path
+                                  "MEMORY_CONFIG"  cfg-path})]
+        (is (= true (get-in result [:result :done])))
+        (is (string? (get-in result [:result :warning])))))))
+
+(deftest test-enforcement-advisory-with-memories
+  (testing "Stufe :advisory — nach memory_add: :done true ohne :warning"
+    (let [db-path  (str *tmp-dir* "/test-enforce-advisory-saved.db")
+          cfg-path (str *tmp-dir* "/config-advisory-saved.edn")]
+      (write-config! cfg-path :advisory)
+      (let [results (call-plugin-seq
+                     [{:jsonrpc "2.0" :id 1 :method "tools/call"
+                       :params {:name "memory_add" :arguments {:text "Wichtige Erkenntnis"}}}
+                      {:jsonrpc "2.0" :id 2 :method "tools/call"
+                       :params {:name "memory_session_end" :arguments {}}}]
+                     {"MEMORY_DB"     db-path
+                      "MEMORY_CONFIG" cfg-path})
+            end-res (nth results 1)]
+        (is (= true (get-in end-res [:result :done])))
+        (is (nil? (get-in end-res [:result :warning])))
+        (is (pos? (get-in end-res [:result :saved])))))))
+
+(deftest test-enforcement-strict-no-memories
+  (testing "Stufe :strict — ohne Erinnerungen: :done false, :blocked true"
+    (let [db-path  (str *tmp-dir* "/test-enforce-strict.db")
+          cfg-path (str *tmp-dir* "/config-strict.edn")]
+      (write-config! cfg-path :strict)
+      (let [result (call-plugin {:jsonrpc "2.0" :id 1 :method "tools/call"
+                                  :params {:name "memory_session_end" :arguments {}}}
+                                 {"MEMORY_DB"      db-path
+                                  "MEMORY_CONFIG"  cfg-path})]
+        (is (= false (get-in result [:result :done])))
+        (is (= true  (get-in result [:result :blocked])))))))

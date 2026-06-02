@@ -2,9 +2,14 @@
   (:require [babashka.process :as process]
             [cheshire.core :as json]
             [clojure.string :as str]
-            [events :as events]))
+            [events :as events]
+            [memory-config :as mcfg]))
 
 (def ^:private plugin-session-id "copilot-cli")
+
+;; Tracks how many memory saves (long-term + repo) happened since server start.
+;; Used for enforcement-level checks in memory_session_end.
+(def ^:private memories-saved-count (atom 0))
 
 (defn- plugin-db-path []
   (or (System/getenv "MEMORY_DB")
@@ -31,6 +36,7 @@
                         {:text        (or text "")
                          :source      (keyword (or source "copilot-cli"))
                          :promoted-at (str (java.time.Instant/now))})
+  (swap! memories-saved-count inc)
   {:saved true :text text})
 
 (defn- detect-repo-id
@@ -62,6 +68,7 @@
                                  :source      (keyword (or source "copilot-cli"))
                                  :promoted-at (str (java.time.Instant/now))
                                  :repository  repo-id}))
+        (swap! memories-saved-count inc)
         {:saved true :text text :repository repo-id}))))
 
 (defn- memory-list-repo [{:keys [repository]}]
@@ -87,7 +94,25 @@
 
 (defn- session-end! []
   (events/append-event! :session-end {:source :copilot-cli})
-  {:done true :hint "Run 'bb run dream' for memory consolidation"})
+  (let [level  (mcfg/enforcement-level)
+        n      @memories-saved-count
+        saved? (pos? n)]
+    (case level
+      :passive  {:done true :hint "Run 'bb run dream' for memory consolidation"}
+      :advisory (if saved?
+                  {:done    true
+                   :saved   n
+                   :hint    "Run 'bb run dream' for memory consolidation"}
+                  {:done    true
+                   :warning "No memories saved this session. Consider using memory_add or memory_add_repo."
+                   :hint    "Run 'bb run dream' for memory consolidation"})
+      :strict   (if saved?
+                  {:done  true
+                   :saved n
+                   :hint  "Run 'bb run dream' for memory consolidation"}
+                  {:done    false
+                   :blocked true
+                   :message "STRICT enforcement: save at least one memory with memory_add or memory_add_repo before ending the session."}))))
 
 (def ^:private tool-definitions
   [{:name        "memory_search"
