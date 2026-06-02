@@ -48,47 +48,103 @@
               (long-term-memory->message)])
        vec))
 
-(defn- parse-dream-selection [selection max-items]
-  (let [trimmed (str/trim (or selection ""))]
-    (cond
-      (or (str/blank? trimmed)
-          (= "none" (str/lower-case trimmed)))
-      []
+(defn- prompt-dream-choice []
+  (println "[j] übernehmen  [n] überspringen  [e] beenden")
+  (print "Auswahl> ")
+  (flush)
+  (str/lower-case (str/trim (or (read-line) ""))))
 
-      (= "all" (str/lower-case trimmed))
-      (vec (range 1 (inc max-items)))
-
-      :else
-      (->> (str/split trimmed #"[,\s]+")
-           (keep parse-long)
-           (filter #(<= 1 % max-items))
-           distinct
-           vec))))
+(defn- prompt-dream-conflict-choice []
+  (println "[n] Neu behalten (alt löschen)  [a] Alt behalten (neu verwerfen)")
+  (println "[m] Zusammenführen  [b] Beide behalten  [s] Überspringen")
+  (print "Auswahl> ")
+  (flush)
+  (str/lower-case (str/trim (or (read-line) ""))))
 
 (defn- run-dream! []
   (let [suggestions (dream/dream!)]
     (if-not (seq suggestions)
       (println "[dream] Keine Vorschläge.")
       (do
-        (println "[dream] Vorschläge:")
-        (doseq [[idx suggestion] (map-indexed vector suggestions)]
-          (println (str "  " (inc idx) ". " suggestion)))
-        (println "Speichern? Nummern (z. B. 1,3), 'all' oder Enter für none:")
-        (print "dream> ")
-        (flush)
-        (let [selection (read-line)
-              chosen (parse-dream-selection selection (count suggestions))]
-          (if-not (seq chosen)
-            (println "[dream] Nichts gespeichert.")
-            (do
-              (doseq [idx chosen]
-                (dream/promote! (nth suggestions (dec idx)) :dream))
-              (println (str "[dream] " (count chosen) " Einträge gespeichert.")))))))
-    (let [conflicts (dream/detect-conflicts!)]
-      (if (seq conflicts)
-        (println (str "[dream] ⚠️  " (count conflicts)
-                      " Widersprüche erkannt. Nutze `conflicts` zum Auflösen."))
-        (println "[dream] Keine Widersprüche erkannt.")))))
+        (loop [remaining suggestions
+               idx 1
+               saved 0]
+          (if-not (seq remaining)
+            (println (str "[dream] " saved " Einträge gespeichert."))
+            (let [suggestion (first remaining)
+                  total (count suggestions)]
+              (println (str "Dream-Vorschlag " idx "/" total ":"))
+              (println (str "\"" suggestion "\""))
+              (let [choice (prompt-dream-choice)]
+                (cond
+                  (= "e" choice)
+                  (println (str "[dream] Beendet. " saved " Einträge gespeichert."))
+
+                  (= "j" choice)
+                  (let [existing-memory (dream/get-long-term-memory)]
+                    (if-let [{:keys [entry reason]} (dream/conflicts-with-existing? suggestion existing-memory)]
+                      (do
+                        (println "⚠️  Konflikt mit bestehendem Eintrag:")
+                        (println (str "Bestehend: \"" (:text entry) "\""))
+                        (println (str "Neu:       \"" suggestion "\""))
+                        (println (str "⚡ " reason))
+                        (let [resolution
+                              (loop []
+                                (let [conflict-choice (prompt-dream-conflict-choice)]
+                                  (cond
+                                    (= "n" conflict-choice)
+                                    (do
+                                      (events/delete-long-term-memory-by-text! (:text entry))
+                                      (dream/promote! suggestion :dream)
+                                      (println "✅ Neuer Eintrag übernommen, alter gelöscht.")
+                                      {:saved-delta 1})
+
+                                    (= "a" conflict-choice)
+                                    (do
+                                      (println "↩️  Neuer Vorschlag verworfen, alter Eintrag bleibt.")
+                                      {:saved-delta 0})
+
+                                    (= "m" conflict-choice)
+                                    (let [merge-input {:entry-a {:text (:text entry)}
+                                                       :entry-b {:text suggestion}}]
+                                      (if-let [merged (dream/resolve-conflict-merge! merge-input)]
+                                        (do
+                                          (println (str "✅ Zusammengeführt: " merged))
+                                          {:saved-delta 1})
+                                        (do
+                                          (println "❌ Zusammenführen fehlgeschlagen.")
+                                          (recur))))
+
+                                    (= "b" conflict-choice)
+                                    (do
+                                      (dream/promote! suggestion :dream)
+                                      (println "✅ Beide Einträge behalten.")
+                                      {:saved-delta 1})
+
+                                    (= "s" conflict-choice)
+                                    (do
+                                      (println "↩️  Übersprungen.")
+                                      {:saved-delta 0})
+
+                                    :else
+                                    (do
+                                      (println "Ungültige Auswahl. Bitte n/a/m/b/s eingeben.")
+                                      (recur)))))]
+                          (recur (rest remaining) (inc idx) (+ saved (:saved-delta resolution)))))
+                      (do
+                        (dream/promote! suggestion :dream)
+                        (println "✅ Eintrag übernommen.")
+                        (recur (rest remaining) (inc idx) (inc saved)))))
+
+                  (or (= "n" choice) (str/blank? choice))
+                  (do
+                    (println "↩️  Übersprungen.")
+                    (recur (rest remaining) (inc idx) saved))
+
+                  :else
+                  (do
+                    (println "Ungültige Auswahl. Bitte j/n/e eingeben.")
+                    (recur remaining idx saved)))))))))))
 
 (defn- prompt-conflict-choice []
   (println "[a] A behalten  [b] B behalten  [both] beide  [merge] zusammenführen  [skip]")

@@ -83,6 +83,49 @@
           (catch Exception _
             []))))))
 
+(defn- parse-json-object [text]
+  (let [content (str/trim (or text ""))]
+    (try
+      (let [parsed (json/parse-string content true)]
+        (if (map? parsed) parsed nil))
+      (catch Exception _
+        (try
+          (when-let [obj (re-find #"(?s)\{.*\}" content)]
+           (let [parsed (json/parse-string obj true)]
+             (when (map? parsed) parsed)))
+          (catch Exception _
+           nil))))))
+
+(defn conflicts-with-existing? [new-text existing-memory]
+  (let [candidate (str/trim (or new-text ""))]
+    (when (and (not (str/blank? candidate))
+              (seq existing-memory))
+      (let [numbered (->> existing-memory
+                         (map-indexed (fn [idx {:keys [text]}]
+                                        (str (inc idx) ". " text)))
+                         (str/join "\n"))
+           result (llm/chat [{:role "system"
+                              :content (str "Prüfe, ob ein neuer Langzeit-Gedächtnis-Eintrag im "
+                                            "Widerspruch zu bestehenden Einträgen steht. "
+                                            "Antworte ausschließlich als JSON-Objekt: "
+                                            "{\"conflict\": true/false, \"index\": <nr>, \"reason\": \"...\"}. "
+                                            "Wenn kein Widerspruch besteht: {\"conflict\": false}.")}
+                             {:role "user"
+                              :content (str "Neuer Eintrag: " candidate "\n\n"
+                                            "Bestehende Einträge:\n" numbered)}])]
+        (when (:ok result)
+          (let [{:keys [conflict index reason]} (parse-json-object (:content result))]
+           (when (and (true? conflict) (number? index))
+             (let [idx (dec (long index))
+                   entry (when (and (>= idx 0) (< idx (count existing-memory)))
+                           (nth existing-memory idx))
+                   reason-text (str/trim (or reason ""))]
+               (when entry
+                 {:entry entry
+                  :reason (if (str/blank? reason-text)
+                            "Widersprüchliche Aussage"
+                            reason-text)})))))))))
+
 (defn detect-conflicts! []
   (let [entries (get-long-term-memory)]
     (if (< (count entries) 2)
