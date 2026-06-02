@@ -1,6 +1,8 @@
 (ns tasks.db
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
+            [honey.sql :as sql]
+            [honey.sql.helpers :as h]
             [pod-loader]))
 
 (defn- db-path []
@@ -29,14 +31,12 @@
       (println (str "DB nicht gefunden: " path))
       (do
         (ensure-pod!)
-        (let [sql  (if session
-                     ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                       FROM events WHERE session = ?
-                       ORDER BY COALESCE(valid_time, timestamp) DESC LIMIT ?" session n]
-                     ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                       FROM events
-                       ORDER BY COALESCE(valid_time, timestamp) DESC LIMIT ?" n])
-              rows (query! path sql)]
+        (let [base  (-> (h/select :id :session :type [[:coalesce :valid_time :timestamp] :ts] :data)
+                        (h/from :events)
+                        (h/order-by [[:coalesce :valid_time :timestamp] :desc])
+                        (h/limit n))
+              q    (cond-> base session (h/where [:= :session session]))
+              rows (query! path (sql/format q))]
           (println (format "%-36s %-16s %-20s %-30s %s" "ID" "SESSION" "TYPE" "TIMESTAMP" "DATA"))
           (println (apply str (repeat 120 "-")))
           (doseq [row rows]
@@ -115,15 +115,12 @@
         (println "Ctrl+C zum Beenden. Enter oder F5 zum Sofort-Aktualisieren.\n")
         (loop [last-ts ""]
           (reset! refresh-flag false)
-          (let [sql  (if session
-                       ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                         FROM events WHERE session = ?
-                         AND COALESCE(valid_time, timestamp) > ?
-                         ORDER BY COALESCE(valid_time, timestamp) ASC" session last-ts]
-                       ["SELECT id, session, type, COALESCE(valid_time, timestamp) AS ts, data
-                         FROM events WHERE COALESCE(valid_time, timestamp) > ?
-                         ORDER BY COALESCE(valid_time, timestamp) ASC" last-ts])
-                rows (query! path sql)
+          (let [base  (-> (h/select :id :session :type [[:coalesce :valid_time :timestamp] :ts] :data)
+                          (h/from :events)
+                          (h/where [:> [:coalesce :valid_time :timestamp] last-ts])
+                          (h/order-by [[:coalesce :valid_time :timestamp] :asc]))
+                q    (cond-> base session (h/where [:= :session session]))
+                rows (query! path (sql/format q))
                 new-ts (if (seq rows) (:ts (last rows)) last-ts)]
             (doseq [row rows]
               (println (format "[%s] %-20s %-16s %s"
