@@ -60,16 +60,18 @@
       (is (= "agentic-memory" (get-in result [:result :serverInfo :name]))))))
 
 (deftest test-tools-list
-  (testing "Plugin gibt 4 Tools zurück"
+  (testing "Plugin gibt 6 Tools zurück"
     (let [db-path (str *tmp-dir* "/test-plugin-tools.db")
           result  (call-plugin {:jsonrpc "2.0" :id 1 :method "tools/list" :params {}}
                                {"MEMORY_DB" db-path})
           tools   (get-in result [:result :tools])]
-      (is (= 4 (count tools)))
+      (is (= 6 (count tools)))
       (is (some #(= "memory_search" (:name %)) tools))
       (is (some #(= "memory_add" (:name %)) tools))
       (is (some #(= "memory_list" (:name %)) tools))
-      (is (some #(= "memory_session_end" (:name %)) tools)))))
+      (is (some #(= "memory_session_end" (:name %)) tools))
+      (is (some #(= "memory_add_repo" (:name %)) tools))
+      (is (some #(= "memory_list_repo" (:name %)) tools)))))
 
 (deftest test-memory-roundtrip-in-one-process
   (testing "memory_add, memory_search, memory_list und memory_session_end funktionieren in einem Prozess"
@@ -102,3 +104,24 @@
       (is (= "Babashka ist das bevorzugte Tool"
              (get-in list-res [:result :entries 0 :data :text])))
       (is (= true (get-in end-res [:result :done]))))))
+
+(deftest test-memory-repo-roundtrip
+  (testing "memory_add_repo und memory_list_repo funktionieren im selben Prozess"
+    (let [db-path  (str *tmp-dir* "/test-plugin-repo.db")
+          repo-url "https://github.com/test-org/test-repo.git"
+          results  (call-plugin-seq
+                    [{:jsonrpc "2.0" :id 1 :method "tools/call"
+                      :params {:name "memory_add_repo"
+                               :arguments {:text       "Immer HoneySQL für SQL verwenden"
+                                           :repository repo-url}}}
+                     {:jsonrpc "2.0" :id 2 :method "tools/call"
+                      :params {:name "memory_list_repo"
+                               :arguments {:repository repo-url}}}]
+                    {"MEMORY_DB" db-path})
+          add-res  (nth results 0)
+          list-res (nth results 1)]
+      (is (= true (get-in add-res [:result :saved])))
+      (is (= "repo:github.com/test-org/test-repo" (get-in add-res [:result :repository])))
+      (is (= 1 (get-in list-res [:result :count])))
+      (is (= "Immer HoneySQL für SQL verwenden"
+             (get-in list-res [:result :entries 0 :data :text]))))))

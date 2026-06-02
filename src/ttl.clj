@@ -10,7 +10,8 @@
    :tool-call 14
    :session-end 7
    :summary 90
-   :long-term-memory nil})
+   :long-term-memory nil
+   :repository-memory nil})
 
 (defn get-env [k]
   (System/getenv k))

@@ -279,3 +279,41 @@
         (is (= #{{:session "session-A" :requests 1 :tokens 40}
                  {:session "session-B" :requests 1 :tokens 25}}
                (set (:by-session stats))))))))
+
+(deftest test-normalize-repo-url
+  (testing "HTTPS-URL wird normalisiert"
+    (is (= "repo:github.com/user/repo"
+           (events/normalize-repo-url "https://github.com/user/repo.git")))
+    (is (= "repo:github.com/user/repo"
+           (events/normalize-repo-url "https://github.com/user/repo"))))
+  (testing "SSH-URL wird normalisiert"
+    (is (= "repo:github.com/user/repo"
+           (events/normalize-repo-url "git@github.com:user/repo.git"))))
+  (testing "Trailing-Whitespace wird ignoriert"
+    (is (= "repo:github.com/user/repo"
+           (events/normalize-repo-url "  https://github.com/user/repo.git\n")))))
+
+(deftest test-get-repository-memory
+  (testing "repository-memory Events können repo-scoped gespeichert und abgerufen werden"
+    (events/init-db!)
+    (let [repo-id "repo:github.com/test-org/test-repo"]
+      (binding [events/*session-id* repo-id]
+        (events/append-event! :repository-memory {:text "Repo-Fakt A" :repository repo-id})
+        (events/append-event! :repository-memory {:text "Repo-Fakt B" :repository repo-id}))
+      (let [results (events/get-repository-memory repo-id)]
+        (is (= 2 (count results)))
+        (is (every? #(= :repository-memory (:event/type %)) results))
+        (is (= #{"Repo-Fakt A" "Repo-Fakt B"}
+               (set (map #(get-in % [:event/data :text]) results)))))))
+  (testing "repository-memory ist isoliert von anderen Session-Events"
+    (events/init-db!)
+    (let [repo-id "repo:github.com/other-org/other-repo"]
+      (events/append-event! :long-term-memory {:text "Langzeit-Fakt"})
+      (binding [events/*session-id* repo-id]
+        (events/append-event! :repository-memory {:text "Nur-Repo-Fakt" :repository repo-id}))
+      (let [repo-results (events/get-repository-memory repo-id)
+            session-events (events/get-events)]
+        (is (= 1 (count repo-results)))
+        (is (= "Nur-Repo-Fakt" (get-in (first repo-results) [:event/data :text])))
+        (is (= 1 (count session-events))
+            "Session-Events enthalten nur Events aus dem Default-Context")))))

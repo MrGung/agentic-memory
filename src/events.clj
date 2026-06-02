@@ -143,6 +143,28 @@
                                    :type    event-type
                                    :order   :asc}))))
 
+(defn normalize-repo-url
+    "Normalizes a git remote URL to a stable repo-scope session-id.
+  https://github.com/user/repo.git  →  \"repo:github.com/user/repo\"
+  git@github.com:user/repo.git      →  \"repo:github.com/user/repo\""
+    [url]
+    (when-not (str/blank? url)
+      (str "repo:"
+           (-> (str/trim url)
+               (str/replace #"^https?://" "")
+               (str/replace #"^git@([^:]+):" "$1/")
+               (str/replace #"\.git$" "")))))
+
+(defn get-repository-memory
+    "Returns all :repository-memory events for the given repo-scope session-id."
+    [repo-session-id]
+    (mapv row->event
+          (sqlite/query *db-path*
+                        (build-query {:session repo-session-id
+                                      :type    :repository-memory
+                                      :order   :desc}))))
+
+
 (defn get-recent-events-by-type
     ([event-type]
      (get-recent-events-by-type event-type 20 true))

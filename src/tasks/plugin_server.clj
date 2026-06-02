@@ -1,5 +1,7 @@
 (ns tasks.plugin-server
-  (:require [cheshire.core :as json]
+  (:require [babashka.process :as process]
+            [cheshire.core :as json]
+            [clojure.string :as str]
             [events :as events]))
 
 (def ^:private plugin-session-id "copilot-cli")
@@ -30,6 +32,50 @@
                          :source      (keyword (or source "copilot-cli"))
                          :promoted-at (str (java.time.Instant/now))})
   {:saved true :text text})
+
+(defn- detect-repo-id
+  "Tries to detect the current git repo-scope session-id via git remote origin.
+  Returns nil when not in a git repo or origin is not set."
+  []
+  (try
+    (let [result (process/sh "git" "remote" "get-url" "origin")]
+      (when (zero? (:exit result))
+        (events/normalize-repo-url (:out result))))
+    (catch Exception _ nil)))
+
+(defn- resolve-repo-id
+  "Returns a repo-scope session-id from the given URL string (explicit)
+  or falls back to auto-detection via git."
+  [repository]
+  (if (str/blank? repository)
+    (detect-repo-id)
+    (events/normalize-repo-url repository)))
+
+(defn- memory-add-repo [{:keys [text source repository]}]
+  (let [repo-id (resolve-repo-id repository)]
+    (if (nil? repo-id)
+      {:saved false :error "Could not determine repository. Pass 'repository' param with the git remote URL."}
+      (do
+        (binding [events/*session-id* repo-id]
+          (events/append-event! :repository-memory
+                                {:text        (or text "")
+                                 :source      (keyword (or source "copilot-cli"))
+                                 :promoted-at (str (java.time.Instant/now))
+                                 :repository  repo-id}))
+        {:saved true :text text :repository repo-id}))))
+
+(defn- memory-list-repo [{:keys [repository]}]
+  (let [repo-id (resolve-repo-id repository)]
+    (if (nil? repo-id)
+      {:entries [] :count 0 :error "Could not determine repository."}
+      (let [results (events/get-repository-memory repo-id)]
+        {:entries    (mapv (fn [evt]
+                             {:timestamp  (or (:event/valid-time evt) (:event/timestamp evt))
+                              :repository (get-in evt [:event/data :repository])
+                              :data       (:event/data evt)})
+                           results)
+         :count      (count results)
+         :repository repo-id}))))
 
 (defn- memory-list []
   (let [results (events/get-recent-events-by-type :long-term-memory 50 true)]
@@ -62,7 +108,19 @@
     :inputSchema {:type "object" :properties {} :required []}}
    {:name        "memory_session_end"
     :description "Mark session as ended, prepare for dream consolidation."
-    :inputSchema {:type "object" :properties {} :required []}}])
+    :inputSchema {:type "object" :properties {} :required []}}
+   {:name        "memory_add_repo"
+    :description "Save a repository-scoped fact that applies to all clones and worktrees of the same repo."
+    :inputSchema {:type       "object"
+                  :properties {:text       {:type "string" :description "The fact to remember for this repo"}
+                               :source     {:type "string" :description "Source identifier"}
+                               :repository {:type "string" :description "Git remote URL (auto-detected if omitted)"}}
+                  :required   ["text"]}}
+   {:name        "memory_list_repo"
+    :description "List all repository-scoped memory entries for the current (or specified) git repository."
+    :inputSchema {:type       "object"
+                  :properties {:repository {:type "string" :description "Git remote URL (auto-detected if omitted)"}}
+                  :required   []}}])
 
 (defn- dispatch [method params]
   (case method
@@ -77,6 +135,8 @@
                                   "memory_add"         (memory-add args)
                                   "memory_list"        (memory-list)
                                   "memory_session_end" (session-end!)
+                                  "memory_add_repo"    (memory-add-repo args)
+                                  "memory_list_repo"   (memory-list-repo args)
                                   {:error (str "Unknown tool: " tool-name)}))
     "notifications/initialized" nil
     {:error (str "Unknown method: " method)}))
