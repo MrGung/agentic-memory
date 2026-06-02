@@ -4,21 +4,21 @@
     "sessionStart": [
       {
         "type": "command",
-        "bash": "bb scripts/memory_session_start.clj",
+        "bash": "bb run hook-session-start",
         "timeoutSec": 5
       }
     ],
     "postToolUse": [
       {
         "type": "command",
-        "bash": "bb scripts/memory_post_tool.clj",
+        "bash": "bb run hook-post-tool",
         "timeoutSec": 5
       }
     ],
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "bb scripts/memory_session_end.clj",
+        "bash": "bb run hook-session-end",
         "timeoutSec": 10
       }
     ]

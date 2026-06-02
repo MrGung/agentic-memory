@@ -7,9 +7,7 @@
   "Installiert das Copilot CLI Plugin via 'copilot plugin install'."
   []
   (let [repo-dir    (str (fs/canonicalize "."))
-        script-path (str/replace
-                     (str repo-dir "/plugin/memory_plugin.clj")
-                     "\\" "/")
+        bb-edn-path (str/replace (str repo-dir "/bb.edn") "\\" "/")
         plugin-dir  (str repo-dir "/plugin")
         plugin-json (str plugin-dir "/plugin.json")
         content     (format (str "{\n"
@@ -19,13 +17,13 @@
                                  "  \"mcpServers\": {\n"
                                  "    \"agentic-memory\": {\n"
                                  "      \"type\": \"stdio\",\n"
-                                 "      \"command\": \"b\",\n"
-                                 "      \"args\": [\"%s\"],\n"
+                                 "      \"command\": \"bb\",\n"
+                                 "      \"args\": [\"--config\", \"%s\", \"-x\", \"tasks.plugin-server/serve\"],\n"
                                  "      \"tools\": [\"memory_search\", \"memory_add\", \"memory_list\", \"memory_session_end\"]\n"
                                  "    }\n"
                                  "  }\n"
                                  "}")
-                            script-path)]
+                            bb-edn-path)]
     (spit plugin-json content)
     (println "📝 plugin.json geschrieben:" plugin-json)
     (shell "copilot" "plugin" "install" plugin-dir)

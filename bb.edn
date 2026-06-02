@@ -16,6 +16,14 @@
         :task (exec 'tasks.db/-main)}
   db-watch {:doc "DB live beobachten (wie tail -f): b db-watch [session=id]"
             :task (exec 'tasks.db/-main-watch)}
+  hook-session-start {:doc "Lifecycle: sessionStart — Langzeit-Gedächtnis ausgeben"
+                      :task (exec 'tasks.hooks/session-start)}
+  hook-post-tool     {:doc "Lifecycle: postToolUse — Tool-Result speichern"
+                      :task (exec 'tasks.hooks/post-tool)}
+  hook-session-end   {:doc "Lifecycle: sessionEnd — Session markieren"
+                      :task (exec 'tasks.hooks/session-end)}
+  plugin-serve       {:doc "MCP plugin server starten (wird von Copilot CLI Plugin genutzt)"
+                      :task (exec 'tasks.plugin-server/serve)}
   test {:doc "Run all tests"
         :requires ([babashka.fs :as fs]
                    [clojure.string :as str]

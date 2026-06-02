@@ -4,21 +4,21 @@
     "sessionStart": [
       {
         "type": "command",
-        "bash": "MEMORY_DB=${MEMORY_DB:-$HOME/.agentic-memory/memory.db} bb AGENTIC_MEMORY_PATH/scripts/memory_session_start.clj",
+        "bash": "bb --config AGENTIC_MEMORY_PATH/bb.edn run hook-session-start",
         "timeoutSec": 5
       }
     ],
     "postToolUse": [
       {
         "type": "command",
-        "bash": "MEMORY_DB=${MEMORY_DB:-$HOME/.agentic-memory/memory.db} bb AGENTIC_MEMORY_PATH/scripts/memory_post_tool.clj",
+        "bash": "bb --config AGENTIC_MEMORY_PATH/bb.edn run hook-post-tool",
         "timeoutSec": 5
       }
     ],
     "sessionEnd": [
       {
         "type": "command",
-        "bash": "MEMORY_DB=${MEMORY_DB:-$HOME/.agentic-memory/memory.db} bb AGENTIC_MEMORY_PATH/scripts/memory_session_end.clj",
+        "bash": "bb --config AGENTIC_MEMORY_PATH/bb.edn run hook-session-end",
         "timeoutSec": 10
       }
     ]
