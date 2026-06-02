@@ -2,12 +2,18 @@
   (:require [babashka.pods :as pods]
             [clojure.string :as str]
             [clojure.edn :as edn]
+            [honey.sql :as sql]
+            [honey.sql.helpers :as h]
             [pod-loader :as pod-loader])
   (:import [java.time Instant]
            [java.util UUID]))
 
 (pod-loader/load-sqlite-pod!)
 (require '[pod.babashka.go-sqlite3 :as sqlite])
+
+(sql/register-fn! :like-lower-escape
+  (fn [_op [pattern]]
+    [(str "LOWER(data) LIKE ? ESCAPE '\\'") pattern]))
 
 (def ^:dynamic *db-path* "memory.db")
 
@@ -57,14 +63,15 @@
                           :event/data             data}]
     (sqlite/execute!
      *db-path*
-     ["INSERT INTO events (id, session, type, data, timestamp, transaction_time, valid_time) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      (str id)
-      *session-id*
-      (name event-type)
-      (pr-str data)
-      transaction-str
-      transaction-str
-      valid-time-str])
+     (sql/format {:insert-into :events
+                 :columns     [:id :session :type :data :timestamp :transaction_time :valid_time]
+                 :values      [[(str id)
+                                *session-id*
+                                (name event-type)
+                                (pr-str data)
+                                transaction-str
+                                transaction-str
+                                valid-time-str]]}))
     record)))
 
 (defn- row->event [row]
@@ -96,20 +103,16 @@
 (defn- build-query
     [{:keys [session type search limit order after]
       :or   {order :asc}}]
-    (let [conditions (cond-> []
-                    session (conj ["session = ?" session])
-                    type    (conj ["type = ?" (event-type->db-value type)])
-                    search  (conj ["LOWER(data) LIKE ? ESCAPE '\\'" (like-pattern search)])
-                    after   (conj ["COALESCE(valid_time, timestamp) > ?" (str after)]))
-       where-sql  (when (seq conditions)
-                    (str "WHERE " (str/join " AND " (map first conditions))))
-       sql-parts  (cond-> ["SELECT id, session, type, data, transaction_time, valid_time, timestamp FROM events"
-                           where-sql
-                           (str "ORDER BY COALESCE(valid_time, timestamp) " (if (= order :desc) "DESC" "ASC"))]
-                    limit (conj "LIMIT ?"))
-       params     (cond-> (mapv second conditions)
-                    limit (conj limit))]
-      (into [(str/join " " (remove nil? sql-parts))] params)))
+    (sql/format
+     (cond-> (-> (h/select :id :session :type :data :transaction_time :valid_time :timestamp)
+                 (h/from :events)
+                 (h/order-by [[:coalesce :valid_time :timestamp]
+                              (if (= order :desc) :desc :asc)]))
+       session (h/where [:= :session session])
+       type    (h/where [:= :type (event-type->db-value type)])
+       search  (h/where [:like-lower-escape (like-pattern search)])
+       after   (h/where [:> [:coalesce :valid_time :timestamp] (str after)])
+       limit   (h/limit limit))))
 
 (defn get-events []
     (mapv row->event
@@ -192,59 +195,59 @@
 
 (defn list-sessions []
     (->> (sqlite/query *db-path*
-                    ["SELECT session,
-                             MIN(COALESCE(valid_time, transaction_time, timestamp)) as started,
-                             MAX(COALESCE(valid_time, transaction_time, timestamp)) as last_active,
-                             COUNT(*) as event_count
-                      FROM events
-                      GROUP BY session
-                      ORDER BY last_active DESC"])
+                      (sql/format {:select   [[:session]
+                                              [[:min [:coalesce :valid_time :transaction_time :timestamp]] :started]
+                                              [[:max [:coalesce :valid_time :transaction_time :timestamp]] :last_active]
+                                              [[:count :*] :event_count]]
+                                   :from     [:events]
+                                   :group-by [:session]
+                                   :order-by [[:last_active :desc]]}))
       (mapv identity)))
 
 (defn delete-session! [session-id]
     (sqlite/execute!
      *db-path*
-     ["DELETE FROM events WHERE session = ?" session-id]))
+     (sql/format {:delete-from :events
+                 :where       [:= :session session-id]})))
 
 (defn count-events-before [event-type timestamp]
     (let [row (first (sqlite/query *db-path*
-                                  ["SELECT COUNT(*) AS count
-                                    FROM events
-                                    WHERE type = ?
-                                      AND COALESCE(valid_time, timestamp) <= ?"
-                                   (event-type->db-value event-type)
-                                   (str timestamp)]))]
+                                  (sql/format {:select [[[:count :*] :count]]
+                                               :from   [:events]
+                                               :where  [:and
+                                                        [:= :type (event-type->db-value event-type)]
+                                                        [:<= [:coalesce :valid_time :timestamp] (str timestamp)]]})))]
      (or (:count row) 0)))
 
 (defn delete-events-before! [event-type timestamp]
     (let [deleted (count-events-before event-type timestamp)]
      (sqlite/execute!
       *db-path*
-      ["DELETE FROM events
-        WHERE type = ?
-          AND COALESCE(valid_time, timestamp) <= ?"
-       (event-type->db-value event-type)
-       (str timestamp)])
+      (sql/format {:delete-from :events
+                   :where       [:and
+                                 [:= :type (event-type->db-value event-type)]
+                                 [:<= [:coalesce :valid_time :timestamp] (str timestamp)]]}))
      deleted))
 
 (defn delete-long-term-memory-by-text! [text]
     (let [trimmed (str/trim (or text ""))]
-      (if (str/blank? trimmed)
-        0
-        (let [pattern (like-pattern trimmed)
-              count-row (first (sqlite/query *db-path*
-                                             ["SELECT COUNT(*) AS count FROM events
-                                               WHERE type = 'long-term-memory'
-                                                 AND LOWER(data) LIKE ? ESCAPE '\\'"
-                                              pattern]))
+     (if (str/blank? trimmed)
+       0
+       (let [pattern (like-pattern trimmed)
+             count-row (first (sqlite/query *db-path*
+                                            (sql/format {:select [[[:count :*] :count]]
+                                                         :from   [:events]
+                                                         :where  [:and
+                                                                  [:= :type "long-term-memory"]
+                                                                  [:like-lower-escape pattern]]})))
               cnt (long (or (:count count-row) 0))]
           (when (pos? cnt)
             (sqlite/execute!
              *db-path*
-             ["DELETE FROM events
-               WHERE type = 'long-term-memory'
-                 AND LOWER(data) LIKE ? ESCAPE '\\'"
-              pattern]))
+            (sql/format {:delete-from :events
+                         :where       [:and
+                                       [:= :type "long-term-memory"]
+                                       [:like-lower-escape pattern]]})))
           cnt))))
 
 (defn get-usage-stats

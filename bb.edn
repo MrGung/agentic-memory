@@ -1,4 +1,4 @@
-{:deps {}
+{:deps {com.github.seancorfield/honeysql {:local/root "c:\\Users\\T06057A\\.m2\\repository\\com\\github\\seancorfield\\honeysql\\2.2.891\\honeysql-2.2.891.jar"}}
  :paths ["src" "test"]
  :tasks
  {:override-builtin true
