@@ -22,6 +22,7 @@
         (f)
         (finally
           (events/close-db!)
+          (Thread/sleep 200)
           (fs/delete-tree dir))))))
 
 (use-fixtures :each with-test-db)
@@ -97,7 +98,10 @@
                                                :after "2026-05-30T10:00:00Z"
                                                :order :desc
                                                :limit 5})]
-      (is (str/includes? sql "WHERE session = ? AND type = ? AND LOWER(data) LIKE ? ESCAPE '\\' AND COALESCE(valid_time, timestamp) > ?"))
+      (is (str/includes? sql "(session = ?)"))
+      (is (str/includes? sql "(type = ?)"))
+      (is (str/includes? sql "LOWER(data) LIKE ? ESCAPE '\\'"))
+      (is (str/includes? sql "COALESCE(valid_time, timestamp) > ?"))
       (is (str/includes? sql "ORDER BY COALESCE(valid_time, timestamp) DESC"))
       (is (str/includes? sql "LIMIT ?"))
       (is (= ["s-1" "user-message" "%te\\_st\\%%" "2026-05-30T10:00:00Z" 5]

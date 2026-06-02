@@ -10,8 +10,8 @@
 (def ^:private bb-bin
   (or (System/getenv "BB_BIN") "b"))
 
-(def ^:private plugin-path
-  (str (fs/cwd) "/plugin/memory_plugin.clj"))
+(def ^:private bb-config
+  (str (fs/cwd) "/bb.edn"))
 
 (def ^:dynamic *tmp-dir* nil)
 
@@ -26,12 +26,15 @@
 
 (use-fixtures :each with-temp-dir)
 
+(defn- with-env [env-map]
+  (merge (into {} (System/getenv)) env-map))
+
 (defn- call-plugin [request env-map]
-  (let [proc (p/process [bb-bin plugin-path]
+  (let [proc (p/process [bb-bin "--config" bb-config "-x" "tasks.plugin-server/serve"]
                         {:in  (str (json/generate-string request) "\n")
                          :out :string
                          :err :string
-                         :env env-map})]
+                         :env (with-env env-map)})]
     (-> proc
         p/check
         :out
@@ -40,11 +43,11 @@
 
 (defn- call-plugin-seq [requests env-map]
   (let [input (str (str/join "\n" (map json/generate-string requests)) "\n")
-        proc  (p/process [bb-bin plugin-path]
+        proc  (p/process [bb-bin "--config" bb-config "-x" "tasks.plugin-server/serve"]
                          {:in  input
                           :out :string
                           :err :string
-                          :env env-map})]
+                          :env (with-env env-map)})]
     (->> (-> proc p/check :out str/split-lines)
          (remove str/blank?)
          (mapv #(json/parse-string % true)))))
